@@ -103,7 +103,15 @@ def generate(query: str, policy_docs: list[dict], rare_matches: list[dict] | Non
 
     tool_call = response.choices[0].message.tool_calls[0]
     result = json.loads(tool_call.function.arguments)
+
+    # Deduplicate by policy_name, preferring applicable:true
+    by_name: dict[str, dict] = {}
+    for r in result.get("recommendations", []):
+        name = r.get("policy_name")
+        if name not in by_name or r.get("applicable"):
+            by_name[name] = r
+
     return {
-        "recommendations": result.get("recommendations", []),
+        "recommendations": list(by_name.values()),
         "referral": result.get("referral"),
     }
