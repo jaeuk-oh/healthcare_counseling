@@ -43,10 +43,9 @@ def _haversine(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     return R * 2 * math.asin(math.sqrt(a))
 
 
-def find_nearest(address: str, cancer_type: str | None = None, top_n: int = 5) -> list[dict]:
+def find_nearest(address: str, cancer_type: str | None = None, top_n: int = 5) -> dict:
     """
-    Returns nearest hospitals for the given address and optional cancer type.
-    Falls back to all hospitals if geocoding fails.
+    Returns nearest hospitals and the geocoded origin coordinates.
     """
     hospitals = _load_hospitals()
 
@@ -55,11 +54,8 @@ def find_nearest(address: str, cancer_type: str | None = None, top_n: int = 5) -
 
     coords = _geocode_address(address)
     if not coords:
-        # Can't geocode — return hospitals that have coordinates, sorted by name
         result = [h for h in hospitals if h.get("lat")][:top_n]
-        for h in result:
-            h = h.copy()
-        return [_format(h, None) for h in result]
+        return {"hospitals": [_format(h, None) for h in result], "origin": None}
 
     origin_lat, origin_lng = coords
     with_dist = []
@@ -69,7 +65,10 @@ def find_nearest(address: str, cancer_type: str | None = None, top_n: int = 5) -
             with_dist.append((dist, h))
 
     with_dist.sort(key=lambda x: x[0])
-    return [_format(h, dist) for dist, h in with_dist[:top_n]]
+    return {
+        "hospitals": [_format(h, dist) for dist, h in with_dist[:top_n]],
+        "origin": {"lat": origin_lat, "lng": origin_lng},
+    }
 
 
 def _format(hospital: dict, distance_km: float | None) -> dict:

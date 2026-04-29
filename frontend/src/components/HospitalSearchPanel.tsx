@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import dynamic from "next/dynamic";
-import type { Hospital } from "@/types";
+import type { Hospital, HospitalOrigin } from "@/types";
 
 const HospitalMap = dynamic(() => import("./HospitalMap"), { ssr: false });
 
@@ -14,6 +14,7 @@ export default function HospitalSearchPanel() {
   const [address, setAddress] = useState("");
   const [cancerType, setCancerType] = useState("");
   const [hospitals, setHospitals] = useState<Hospital[] | null>(null);
+  const [origin, setOrigin] = useState<HospitalOrigin | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -33,6 +34,7 @@ export default function HospitalSearchPanel() {
       }
       const data = await res.json();
       setHospitals(data.hospitals);
+      setOrigin(data.origin ?? null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "오류가 발생했습니다.");
     } finally {
@@ -80,7 +82,7 @@ export default function HospitalSearchPanel() {
         {error && <p className="text-xs text-red-500">{error}</p>}
 
         {hospitals !== null && hospitals.length > 0 && (
-          <HospitalMap hospitals={hospitals} />
+          <HospitalMap hospitals={hospitals} origin={origin} />
         )}
 
         {hospitals !== null && (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import type { ChatMessage, PolicyRecommendation, Referral, ChatResponse } from "@/types";
 import CalleePanel from "@/components/CalleePanel";
 import RecommendationPanel from "@/components/RecommendationPanel";
@@ -8,25 +8,35 @@ import HospitalSearchPanel from "@/components/HospitalSearchPanel";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+const DEFAULT_SCENARIO = "50대 남성, 경기도 하남시 미사강변대로 200 미사리버하임 101동 1502호 거주, 위암 진단, 의료급여 수급자, 치료비 부담으로 지원 문의";
+
+const PRESET_SCENARIOS = [
+  "50대 남성, 경기도 하남시 미사강변대로 200 미사리버하임 101동 1502호 거주, 위암 진단, 의료급여 수급자, 치료비 부담으로 지원 문의",
+  "30대 여성, 경기도 하남시 위례학암로 14번길 위례자이아파트 202동 505호 거주, 유방암 확진, 건강보험 가입, 국가암검진 병원 문의",
+  "60대 남성, 경기도 하남시 대청로 33 하남아이파크 303동 801호 거주, 희귀질환(파브리병) 진단, 의료급여 수급자, 의료비 지원 문의",
+  "40대 여성, 경기도 하남시 감일백제로 105 감일센트럴뷰 501동 1201호 거주, 간암 초기 진단, 건강보험 가입, 소득 하위 50%, 검진기관 안내 요청",
+];
+
 export default function Home() {
-  const [scenario, setScenario] = useState("");
-  const [started, setStarted] = useState(false);
+  const [scenario, setScenario] = useState(DEFAULT_SCENARIO);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [counselorInput, setCounselorInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [recommendations, setRecommendations] = useState<PolicyRecommendation[] | null>(null);
   const [referral, setReferral] = useState<Referral | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showScenarioPicker, setShowScenarioPicker] = useState(false);
+  const initialized = useRef(false);
 
   const callChat = useCallback(
-    async (currentMessages: ChatMessage[]) => {
+    async (currentMessages: ChatMessage[], activeScenario: string) => {
       setLoading(true);
       setError(null);
       try {
         const res = await fetch(`${API_BASE}/chat`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ scenario, messages: currentMessages }),
+          body: JSON.stringify({ scenario: activeScenario, messages: currentMessages }),
         });
         if (!res.ok) throw new Error(`서버 오류 (${res.status})`);
         const data: ChatResponse = await res.json();
@@ -39,16 +49,27 @@ export default function Home() {
         setLoading(false);
       }
     },
-    [scenario]
+    []
   );
 
-  const startConsultation = useCallback(async () => {
-    if (!scenario.trim() || loading) return;
-    setStarted(true);
-    setMessages([]);
-    setRecommendations(null);
-    await callChat([]);
-  }, [scenario, loading, callChat]);
+  const startNew = useCallback(
+    async (newScenario: string) => {
+      setScenario(newScenario);
+      setMessages([]);
+      setRecommendations(null);
+      setReferral(null);
+      setError(null);
+      setShowScenarioPicker(false);
+      await callChat([], newScenario);
+    },
+    [callChat]
+  );
+
+  useEffect(() => {
+    if (initialized.current) return;
+    initialized.current = true;
+    callChat([], DEFAULT_SCENARIO);
+  }, [callChat]);
 
   const sendCounselorMessage = useCallback(async () => {
     const content = counselorInput.trim();
@@ -56,57 +77,8 @@ export default function Home() {
     const updated: ChatMessage[] = [...messages, { role: "counselor", content }];
     setMessages(updated);
     setCounselorInput("");
-    await callChat(updated);
-  }, [counselorInput, loading, messages, callChat]);
-
-  const reset = useCallback(() => {
-    setStarted(false);
-    setScenario("");
-    setMessages([]);
-    setCounselorInput("");
-    setRecommendations(null);
-    setReferral(null);
-    setError(null);
-  }, []);
-
-  if (!started) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-gray-50">
-        <div className="w-full max-w-lg rounded-2xl bg-white p-8 shadow-sm ring-1 ring-gray-200">
-          <h1 className="text-xl font-bold text-gray-900">보건소 의료비 지원 상담 AI</h1>
-          <p className="mt-1 text-sm text-gray-500">
-            시민 시나리오를 입력하면 AI가 상담 전화를 걸어옵니다.
-          </p>
-          <div className="mt-6">
-            <label className="text-sm font-medium text-gray-700">시민 상황</label>
-            <textarea
-              value={scenario}
-              onChange={(e) => setScenario(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  startConsultation();
-                }
-              }}
-              placeholder="예: 50대 남성, 위암 진단, 건강보험 가입, 소득 없음"
-              rows={4}
-              className="mt-1.5 w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
-            />
-          </div>
-          <button
-            onClick={startConsultation}
-            disabled={!scenario.trim() || loading}
-            className="mt-4 w-full rounded-xl bg-blue-500 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-600 disabled:opacity-40"
-          >
-            {loading ? "연결 중…" : "상담 시작"}
-          </button>
-          {error && (
-            <p className="mt-3 text-xs text-red-500">{error}</p>
-          )}
-        </div>
-      </div>
-    );
-  }
+    await callChat(updated, scenario);
+  }, [counselorInput, loading, messages, callChat, scenario]);
 
   return (
     <div className="flex h-screen flex-col">
@@ -114,12 +86,10 @@ export default function Home() {
         <div className="mx-auto flex max-w-7xl items-center justify-between">
           <div>
             <h1 className="text-lg font-bold text-gray-900">보건소 의료비 지원 상담 AI</h1>
-            <p className="mt-0.5 max-w-xl truncate text-xs text-gray-500">
-              시민 상황: {scenario}
-            </p>
+            <p className="mt-0.5 max-w-xl truncate text-xs text-gray-500">시민 상황: {scenario}</p>
           </div>
           <button
-            onClick={reset}
+            onClick={() => setShowScenarioPicker(true)}
             className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-50"
           >
             새 상담
@@ -148,6 +118,44 @@ export default function Home() {
       {error && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-700 shadow-lg ring-1 ring-red-200">
           {error}
+        </div>
+      )}
+
+      {showScenarioPicker && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl ring-1 ring-gray-200">
+            <h2 className="text-base font-semibold text-gray-900">새 상담 시작</h2>
+            <p className="mt-1 text-xs text-gray-500">프리셋을 선택하거나 직접 입력하세요.</p>
+            <div className="mt-4 space-y-2">
+              {PRESET_SCENARIOS.map((s) => (
+                <button
+                  key={s}
+                  onClick={() => startNew(s)}
+                  className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-left text-xs text-gray-700 hover:bg-blue-50 hover:border-blue-300"
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+            <textarea
+              placeholder="직접 입력…"
+              rows={3}
+              className="mt-3 w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm outline-none focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  const val = (e.target as HTMLTextAreaElement).value.trim();
+                  if (val) startNew(val);
+                }
+              }}
+            />
+            <button
+              onClick={() => setShowScenarioPicker(false)}
+              className="mt-3 w-full rounded-xl border border-gray-200 py-2 text-sm text-gray-500 hover:bg-gray-50"
+            >
+              취소
+            </button>
+          </div>
         </div>
       )}
     </div>

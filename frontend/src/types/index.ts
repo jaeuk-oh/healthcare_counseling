@@ -41,6 +41,12 @@ export interface Hospital {
   lng?: number;
 }
 
+export interface HospitalOrigin {
+  lat: number;
+  lng: number;
+}
+
 export interface HospitalSearchResponse {
   hospitals: Hospital[];
+  origin?: HospitalOrigin | null;
 }

@@ -62,8 +62,8 @@ export default function RecommendationPanel({ recommendations, referral, loading
                 <p className="text-xs font-semibold uppercase tracking-wide text-green-600">
                   해당 정책 ({applicable.length})
                 </p>
-                {applicable.map((r) => (
-                  <PolicyCard key={r.policy_name} recommendation={r} />
+                {applicable.map((r, i) => (
+                  <PolicyCard key={`y-${i}-${r.policy_name}`} recommendation={r} />
                 ))}
               </>
             )}
@@ -73,8 +73,8 @@ export default function RecommendationPanel({ recommendations, referral, loading
                 <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-gray-400">
                   미해당 정책 ({notApplicable.length})
                 </p>
-                {notApplicable.map((r) => (
-                  <PolicyCard key={r.policy_name} recommendation={r} />
+                {notApplicable.map((r, i) => (
+                  <PolicyCard key={`n-${i}-${r.policy_name}`} recommendation={r} />
                 ))}
               </>
             )}
