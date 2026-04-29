@@ -58,6 +58,9 @@ SYSTEM_PROMPT = """당신은 보건소 의료비 지원 정책 전문 상담 보
 4. article 필드에는 해당 문서의 법령 조항 번호를 기재하세요
 5. 의료비 지원과 전혀 무관한 상담(예: 예방접종, 정신건강, 치매, 모자보건 등)은
    recommendations를 빈 배열로 두고 referral에 아래 담당 부서 중 가장 적합한 곳을 기재하세요
+6. applicable 필드는 반드시 eligibility_reasoning의 최종 판단과 일치해야 합니다.
+   reasoning에서 지원 불가, 신청 불가, 중단, 해당 없음이라고 판단했다면 applicable은 반드시 false입니다.
+   reasoning이 "불가능하다", "해당되지 않는다", "지원 중단"으로 끝난다면 applicable=false입니다.
 
 보건소 담당 부서 연락처:
 {contacts}
@@ -112,7 +115,11 @@ def generate(query: str, policy_docs: list[dict], rare_matches: list[dict] | Non
             by_name[name] = r
 
     # If reasoning says ineligible, override applicable to false
-    INELIGIBLE_SIGNALS = ["신규지원 중단", "신규 지원 중단", "지원 불가능", "지원이 불가능", "신청 불가"]
+    INELIGIBLE_SIGNALS = [
+        "신규지원 중단", "신규 지원 중단",
+        "지원 불가능", "지원이 불가능", "지원신청 불가능", "신청 불가능",
+        "신청 불가", "지원 불가", "불가능으로",
+    ]
     recommendations = list(by_name.values())
     for r in recommendations:
         if r.get("applicable") and any(s in r.get("eligibility_reasoning", "") for s in INELIGIBLE_SIGNALS):
