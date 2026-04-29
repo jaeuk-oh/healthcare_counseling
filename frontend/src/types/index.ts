@@ -37,6 +37,8 @@ export interface Hospital {
   phone: string;
   cancers: string[];
   distance_km?: number;
+  lat?: number;
+  lng?: number;
 }
 
 export interface HospitalSearchResponse {

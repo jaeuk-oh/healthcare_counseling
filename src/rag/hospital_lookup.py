@@ -80,4 +80,7 @@ def _format(hospital: dict, distance_km: float | None) -> dict:
     }
     if distance_km is not None:
         result["distance_km"] = round(distance_km, 2)
+    if hospital.get("lat") and hospital.get("lng"):
+        result["lat"] = hospital["lat"]
+        result["lng"] = hospital["lng"]
     return result

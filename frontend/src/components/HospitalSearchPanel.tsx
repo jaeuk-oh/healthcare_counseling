@@ -1,7 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import dynamic from "next/dynamic";
 import type { Hospital } from "@/types";
+
+const HospitalMap = dynamic(() => import("./HospitalMap"), { ssr: false });
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -76,15 +79,24 @@ export default function HospitalSearchPanel() {
 
         {error && <p className="text-xs text-red-500">{error}</p>}
 
+        {hospitals !== null && hospitals.length > 0 && (
+          <HospitalMap hospitals={hospitals} />
+        )}
+
         {hospitals !== null && (
           <div className="space-y-2 pt-1">
             {hospitals.length === 0 ? (
               <p className="text-sm text-gray-400 text-center py-4">해당 조건의 병원이 없습니다.</p>
             ) : (
-              hospitals.map((h) => (
+              hospitals.map((h, i) => (
                 <div key={h.name} className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
                   <div className="flex items-start justify-between gap-2">
-                    <span className="text-sm font-medium text-gray-900">{h.name}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-500 text-xs font-bold text-white">
+                        {i + 1}
+                      </span>
+                      <span className="text-sm font-medium text-gray-900">{h.name}</span>
+                    </div>
                     {h.distance_km != null && (
                       <span className="shrink-0 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
                         {h.distance_km} km
@@ -93,11 +105,11 @@ export default function HospitalSearchPanel() {
                   </div>
                   <a
                     href={`tel:${h.phone}`}
-                    className="mt-0.5 block text-xs font-semibold text-blue-600 hover:underline"
+                    className="mt-0.5 ml-7 block text-xs font-semibold text-blue-600 hover:underline"
                   >
                     {h.phone}
                   </a>
-                  <p className="mt-1 text-xs text-gray-500">{h.cancers.join(" · ")}</p>
+                  <p className="mt-1 ml-7 text-xs text-gray-500">{h.cancers.join(" · ")}</p>
                 </div>
               ))
             )}
