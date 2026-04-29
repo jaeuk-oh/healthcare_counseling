@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import type { ChatMessage, PolicyRecommendation, ChatResponse } from "@/types";
+import type { ChatMessage, PolicyRecommendation, Referral, ChatResponse } from "@/types";
 import CalleePanel from "@/components/CalleePanel";
 import RecommendationPanel from "@/components/RecommendationPanel";
 
@@ -14,6 +14,7 @@ export default function Home() {
   const [counselorInput, setCounselorInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [recommendations, setRecommendations] = useState<PolicyRecommendation[] | null>(null);
+  const [referral, setReferral] = useState<Referral | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const callChat = useCallback(
@@ -30,6 +31,7 @@ export default function Home() {
         const data: ChatResponse = await res.json();
         setMessages((prev) => [...prev, { role: "citizen", content: data.citizen_message }]);
         setRecommendations(data.recommendations);
+        setReferral(data.referral ?? null);
       } catch (err) {
         setError(err instanceof Error ? err.message : "알 수 없는 오류가 발생했습니다.");
       } finally {
@@ -62,6 +64,7 @@ export default function Home() {
     setMessages([]);
     setCounselorInput("");
     setRecommendations(null);
+    setReferral(null);
     setError(null);
   }, []);
 
@@ -135,7 +138,7 @@ export default function Home() {
             />
           </div>
           <div className="flex-1">
-            <RecommendationPanel recommendations={recommendations} loading={loading} />
+            <RecommendationPanel recommendations={recommendations} referral={referral} loading={loading} />
           </div>
         </div>
       </main>

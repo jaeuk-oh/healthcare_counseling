@@ -1,12 +1,13 @@
 import os
 import json
 from openai import OpenAI
+from .contacts_lookup import get_contacts_summary
 
 LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o")
 
 RECOMMEND_FUNCTION = {
     "name": "recommend_policies",
-    "description": "주어진 정책 문서를 근거로 신청 가능한 보건소 의료비 지원 정책을 추천합니다",
+    "description": "주어진 정책 문서를 근거로 신청 가능한 보건소 의료비 지원 정책을 추천하고, 해당 없는 상담은 담당 부서로 연결합니다",
     "parameters": {
         "type": "object",
         "required": ["recommendations"],
@@ -33,7 +34,16 @@ RECOMMEND_FUNCTION = {
                         },
                     },
                 },
-            }
+            },
+            "referral": {
+                "description": "의료비 지원과 무관한 상담일 때만 채웁니다. 관련 있으면 null.",
+                "type": ["object", "null"],
+                "properties": {
+                    "team": {"type": "string"},
+                    "phone": {"type": "string"},
+                    "reason": {"type": "string"},
+                },
+            },
         },
     },
 }
@@ -46,6 +56,11 @@ SYSTEM_PROMPT = """당신은 보건소 의료비 지원 정책 전문 상담 보
 2. 문서에 없는 내용을 추론하거나 추가하지 마세요
 3. applicable=true인 정책만 source_excerpts를 포함하세요
 4. article 필드에는 해당 문서의 법령 조항 번호를 기재하세요
+5. 의료비 지원과 전혀 무관한 상담(예: 예방접종, 정신건강, 치매, 모자보건 등)은
+   recommendations를 빈 배열로 두고 referral에 아래 담당 부서 중 가장 적합한 곳을 기재하세요
+
+보건소 담당 부서 연락처:
+{contacts}
 
 {rare_disease_section}
 정책 문서:
@@ -57,8 +72,6 @@ RARE_DISEASE_SECTION = """희귀질환 코드 조회 결과:
 
 """
 
-NO_RARE_MATCH_SECTION = ""
-
 
 def generate(query: str, policy_docs: list[dict], rare_matches: list[dict] | None = None) -> dict:
     client = OpenAI()
@@ -66,19 +79,19 @@ def generate(query: str, policy_docs: list[dict], rare_matches: list[dict] | Non
         f"[{d['policy_name']}]\n{d['text']}" for d in policy_docs
     )
 
+    rare_section = ""
     if rare_matches:
         match_lines = "\n".join(
             f"- {m['korean_name']} (KCD: {m['kcd_code'] or '없음'})"
             for m in rare_matches
         )
         rare_section = RARE_DISEASE_SECTION.format(matches=match_lines)
-    else:
-        rare_section = NO_RARE_MATCH_SECTION
 
     response = client.chat.completions.create(
         model=LLM_MODEL,
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT.format(
+                contacts=get_contacts_summary(),
                 policy_docs=policy_text,
                 rare_disease_section=rare_section,
             )},
@@ -89,5 +102,8 @@ def generate(query: str, policy_docs: list[dict], rare_matches: list[dict] | Non
     )
 
     tool_call = response.choices[0].message.tool_calls[0]
-    recommendations = json.loads(tool_call.function.arguments)["recommendations"]
-    return {"recommendations": recommendations}
+    result = json.loads(tool_call.function.arguments)
+    return {
+        "recommendations": result.get("recommendations", []),
+        "referral": result.get("referral"),
+    }

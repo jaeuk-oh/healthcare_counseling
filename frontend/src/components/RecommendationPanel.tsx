@@ -1,14 +1,15 @@
 "use client";
 
-import type { PolicyRecommendation } from "@/types";
+import type { PolicyRecommendation, Referral } from "@/types";
 import PolicyCard from "./PolicyCard";
 
 interface RecommendationPanelProps {
   recommendations: PolicyRecommendation[] | null;
+  referral?: Referral | null;
   loading: boolean;
 }
 
-export default function RecommendationPanel({ recommendations, loading }: RecommendationPanelProps) {
+export default function RecommendationPanel({ recommendations, referral, loading }: RecommendationPanelProps) {
   const applicable = recommendations?.filter((r) => r.applicable) ?? [];
   const notApplicable = recommendations?.filter((r) => !r.applicable) ?? [];
 
@@ -42,6 +43,20 @@ export default function RecommendationPanel({ recommendations, loading }: Recomm
 
         {!loading && recommendations !== null && (
           <div className="space-y-3">
+            {referral && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                <p className="text-xs font-semibold text-amber-700">담당 부서 연결 안내</p>
+                <p className="mt-1 text-sm font-medium text-amber-900">{referral.team}</p>
+                <a
+                  href={`tel:${referral.phone}`}
+                  className="mt-0.5 block text-sm font-bold text-amber-800 hover:underline"
+                >
+                  {referral.phone}
+                </a>
+                <p className="mt-1 text-xs text-amber-600">{referral.reason}</p>
+              </div>
+            )}
+
             {applicable.length > 0 && (
               <>
                 <p className="text-xs font-semibold uppercase tracking-wide text-green-600">

@@ -10,8 +10,15 @@ export interface PolicyRecommendation {
   source_excerpts: SourceExcerpt[];
 }
 
+export interface Referral {
+  team: string;
+  phone: string;
+  reason: string;
+}
+
 export interface QueryResponse {
   recommendations: PolicyRecommendation[];
+  referral?: Referral | null;
 }
 
 export interface ChatMessage {
@@ -22,4 +29,5 @@ export interface ChatMessage {
 export interface ChatResponse {
   citizen_message: string;
   recommendations: PolicyRecommendation[];
+  referral?: Referral | null;
 }
