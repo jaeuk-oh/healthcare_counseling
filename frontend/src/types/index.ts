@@ -31,3 +31,14 @@ export interface ChatResponse {
   recommendations: PolicyRecommendation[];
   referral?: Referral | null;
 }
+
+export interface Hospital {
+  name: string;
+  phone: string;
+  cancers: string[];
+  distance_km?: number;
+}
+
+export interface HospitalSearchResponse {
+  hospitals: Hospital[];
+}

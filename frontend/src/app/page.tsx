@@ -4,6 +4,7 @@ import { useState, useCallback } from "react";
 import type { ChatMessage, PolicyRecommendation, Referral, ChatResponse } from "@/types";
 import CalleePanel from "@/components/CalleePanel";
 import RecommendationPanel from "@/components/RecommendationPanel";
+import HospitalSearchPanel from "@/components/HospitalSearchPanel";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -137,8 +138,9 @@ export default function Home() {
               onSubmit={sendCounselorMessage}
             />
           </div>
-          <div className="flex-1">
+          <div className="flex-1 overflow-y-auto space-y-4">
             <RecommendationPanel recommendations={recommendations} referral={referral} loading={loading} />
+            <HospitalSearchPanel />
           </div>
         </div>
       </main>
