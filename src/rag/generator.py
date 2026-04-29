@@ -111,7 +111,14 @@ def generate(query: str, policy_docs: list[dict], rare_matches: list[dict] | Non
         if name not in by_name or r.get("applicable"):
             by_name[name] = r
 
+    # If reasoning says ineligible, override applicable to false
+    INELIGIBLE_SIGNALS = ["신규지원 중단", "신규 지원 중단", "지원 불가능", "지원이 불가능", "신청 불가"]
+    recommendations = list(by_name.values())
+    for r in recommendations:
+        if r.get("applicable") and any(s in r.get("eligibility_reasoning", "") for s in INELIGIBLE_SIGNALS):
+            r["applicable"] = False
+
     return {
-        "recommendations": list(by_name.values()),
+        "recommendations": recommendations,
         "referral": result.get("referral"),
     }
