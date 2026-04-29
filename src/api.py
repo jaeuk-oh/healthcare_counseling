@@ -18,6 +18,7 @@ from pydantic import BaseModel
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.rag.pipeline import run as rag_run
 from src.rag.ingest import ingest
+from src.rag.citizen import generate_citizen_message
 
 app = FastAPI(title="보건소 의료비 지원 상담 AI")
 
@@ -33,6 +34,16 @@ class QueryRequest(BaseModel):
     query: str
 
 
+class ChatTurn(BaseModel):
+    role: str  # "citizen" | "counselor"
+    content: str
+
+
+class ChatRequest(BaseModel):
+    scenario: str
+    messages: list[ChatTurn]
+
+
 @app.post("/query")
 async def query_endpoint(req: QueryRequest):
     if not req.query.strip():
@@ -44,6 +55,22 @@ async def query_endpoint(req: QueryRequest):
 async def ingest_endpoint():
     count = ingest()
     return {"status": "ok", "documents_indexed": count}
+
+
+@app.post("/chat")
+async def chat_endpoint(req: ChatRequest):
+    messages_dict = [{"role": t.role, "content": t.content} for t in req.messages]
+
+    citizen_message = generate_citizen_message(req.scenario, messages_dict)
+
+    all_messages = messages_dict + [{"role": "citizen", "content": citizen_message}]
+    conversation_text = "\n".join(
+        f"{'시민' if m['role'] == 'citizen' else '상담사'}: {m['content']}"
+        for m in all_messages
+    )
+    rag_result = rag_run(conversation_text)
+
+    return {"citizen_message": citizen_message, "recommendations": rag_result["recommendations"]}
 
 
 @app.get("/health")

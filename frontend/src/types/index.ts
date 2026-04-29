@@ -15,6 +15,11 @@ export interface QueryResponse {
 }
 
 export interface ChatMessage {
-  role: "user" | "assistant";
+  role: "citizen" | "counselor";
   content: string;
+}
+
+export interface ChatResponse {
+  citizen_message: string;
+  recommendations: PolicyRecommendation[];
 }
