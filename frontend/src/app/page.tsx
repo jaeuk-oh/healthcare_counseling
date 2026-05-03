@@ -10,6 +10,23 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 const DEFAULT_SCENARIO = "50대 남성, 경기도 하남시 미사강변대로 200 미사리버하임 101동 1502호 거주, 위암 진단, 의료급여 수급자, 치료비 부담으로 지원 문의";
 
+const PERSONALITY_TYPES = [
+  "말을 더듬고 문장을 자주 중간에 끊음",
+  "매우 짧고 단답식으로만 대답함",
+  "짜증이 섞인 말투, 빨리 처리해달라는 태도",
+  "모든 걸 다 해달라는 민원형, 상세한 설명 요구",
+  "표준적인 말투 (특별한 특징 없음)",
+];
+
+function pickPersonality(): string {
+  return PERSONALITY_TYPES[Math.floor(Math.random() * PERSONALITY_TYPES.length)];
+}
+
+function withPersonality(scenario: string): string {
+  const p = pickPersonality();
+  return `${scenario} [성격: ${p}]`;
+}
+
 const PRESET_SCENARIOS = [
   "50대 남성, 경기도 하남시 미사강변대로 200 미사리버하임 101동 1502호 거주, 위암 진단, 의료급여 수급자, 치료비 부담으로 지원 문의",
   "50대 여성, 경기도 하남시 위례학암로 14번길 위례자이아파트 202동 505호 거주, 건강보험 가입, 국가암검진 대상자 안내 우편을 받았는데 어디서 검진받으면 되는지 문의",
@@ -68,16 +85,17 @@ export default function Home() {
 
   const startNew = useCallback(
     async (newScenario: string) => {
-      setScenario(newScenario);
+      const activeScenario = withPersonality(newScenario);
+      setScenario(activeScenario);
       setMessages([]);
       setChecklist(null);
       setError(null);
       setShowScenarioPicker(false);
       setLoading(true);
       try {
-        const initialChecklist = await callClassify(newScenario);
+        const initialChecklist = await callClassify(activeScenario);
         setChecklist(initialChecklist);
-        await callChat([], newScenario, initialChecklist);
+        await callChat([], activeScenario, initialChecklist);
       } catch (err) {
         setError(err instanceof Error ? err.message : "알 수 없는 오류가 발생했습니다.");
         setLoading(false);
