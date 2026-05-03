@@ -1,6 +1,8 @@
 import os
 import sys
+import json
 from pathlib import Path
+from datetime import datetime
 
 from dotenv import load_dotenv
 
@@ -67,6 +69,15 @@ class HospitalSearchRequest(BaseModel):
     top_n: int = 5
 
 
+class SessionEndRequest(BaseModel):
+    scenario: str
+    personality: str
+    turns: int
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
+
+
 @app.post("/query")
 async def query_endpoint(req: QueryRequest):
     if not req.query.strip():
@@ -123,6 +134,24 @@ async def hospital_search_endpoint(req: HospitalSearchRequest):
         raise HTTPException(status_code=503, detail="병원 데이터가 아직 준비되지 않았습니다. crawl_hospitals.py를 먼저 실행하세요.")
     results = find_nearest(req.address, req.cancer_type, req.top_n)
     return {"hospitals": results}
+
+
+@app.post("/session-end")
+async def session_end_endpoint(req: SessionEndRequest):
+    logs_dir = Path(__file__).parent.parent / "logs"
+    logs_dir.mkdir(exist_ok=True)
+    log_entry = {
+        "timestamp": datetime.now().isoformat(timespec="seconds"),
+        "scenario": req.scenario,
+        "personality": req.personality,
+        "turns": req.turns,
+        "prompt_tokens": req.prompt_tokens,
+        "completion_tokens": req.completion_tokens,
+        "total_tokens": req.total_tokens,
+    }
+    with open(logs_dir / "sessions.jsonl", "a", encoding="utf-8") as f:
+        f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
+    return {"status": "ok"}
 
 
 @app.get("/health")
