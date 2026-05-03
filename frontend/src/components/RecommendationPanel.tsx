@@ -1,36 +1,32 @@
 "use client";
 
-import type { PolicyRecommendation, Referral } from "@/types";
+import type { PolicyChecklist } from "@/types";
 import PolicyCard from "./PolicyCard";
 
 interface RecommendationPanelProps {
-  recommendations: PolicyRecommendation[] | null;
-  referral?: Referral | null;
+  checklist: PolicyChecklist[] | null;
   loading: boolean;
 }
 
-export default function RecommendationPanel({ recommendations, referral, loading }: RecommendationPanelProps) {
-  const applicable = recommendations?.filter((r) => r.applicable) ?? [];
-  const notApplicable = recommendations?.filter((r) => !r.applicable) ?? [];
-
+export default function RecommendationPanel({ checklist, loading }: RecommendationPanelProps) {
   return (
     <div className="flex h-full flex-col rounded-2xl bg-white shadow-sm ring-1 ring-gray-200">
       <div className="border-b border-gray-100 px-5 py-4">
         <h2 className="text-base font-semibold text-gray-800">AI 지원 정책 추천</h2>
         <p className="mt-0.5 text-xs text-gray-500">
-          해당 가능한 의료비 지원 제도를 안내합니다.
+          대화가 진행되면서 체크 항목이 하나씩 확인됩니다.
         </p>
       </div>
 
       <div className="flex-1 overflow-y-auto px-5 py-4">
-        {loading && (
+        {loading && checklist === null && (
           <div className="flex h-full flex-col items-center justify-center gap-3 text-gray-400">
             <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-200 border-t-blue-500" />
-            <span className="text-sm">정책 검색 중…</span>
+            <span className="text-sm">정책 분류 중…</span>
           </div>
         )}
 
-        {!loading && recommendations === null && (
+        {!loading && checklist === null && (
           <div className="flex h-full flex-col items-center justify-center text-center text-gray-400">
             <span className="text-4xl">🏥</span>
             <p className="mt-3 text-sm">
@@ -41,42 +37,23 @@ export default function RecommendationPanel({ recommendations, referral, loading
           </div>
         )}
 
-        {!loading && recommendations !== null && (
+        {checklist !== null && (
           <div className="space-y-3">
-            {referral && (
-              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-                <p className="text-xs font-semibold text-amber-700">담당 부서 연결 안내</p>
-                <p className="mt-1 text-sm font-medium text-amber-900">{referral.team}</p>
-                <a
-                  href={`tel:${referral.phone}`}
-                  className="mt-0.5 block text-sm font-bold text-amber-800 hover:underline"
-                >
-                  {referral.phone}
-                </a>
-                <p className="mt-1 text-xs text-amber-600">{referral.reason}</p>
+            {checklist.length === 0 ? (
+              <p className="py-6 text-center text-sm text-gray-400">
+                해당 가능한 의료비 지원 정책이 없습니다.
+              </p>
+            ) : (
+              checklist.map((item) => (
+                <PolicyCard key={item.name} checklist={item} />
+              ))
+            )}
+
+            {loading && checklist.length > 0 && (
+              <div className="flex items-center gap-2 pt-1 text-xs text-gray-400">
+                <div className="h-3 w-3 animate-spin rounded-full border-2 border-blue-200 border-t-blue-400" />
+                항목 업데이트 중…
               </div>
-            )}
-
-            {applicable.length > 0 && (
-              <>
-                <p className="text-xs font-semibold uppercase tracking-wide text-green-600">
-                  해당 정책 ({applicable.length})
-                </p>
-                {applicable.map((r, i) => (
-                  <PolicyCard key={`y-${i}-${r.policy_name}`} recommendation={r} />
-                ))}
-              </>
-            )}
-
-            {notApplicable.length > 0 && (
-              <>
-                <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-gray-400">
-                  미해당 정책 ({notApplicable.length})
-                </p>
-                {notApplicable.map((r, i) => (
-                  <PolicyCard key={`n-${i}-${r.policy_name}`} recommendation={r} />
-                ))}
-              </>
             )}
           </div>
         )}

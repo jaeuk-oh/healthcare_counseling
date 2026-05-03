@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
-import type { ChatMessage, PolicyRecommendation, Referral, ChatResponse } from "@/types";
+import type { ChatMessage, PolicyChecklist, ChatResponse, ClassifyResponse } from "@/types";
 import CalleePanel from "@/components/CalleePanel";
 import RecommendationPanel from "@/components/RecommendationPanel";
 import HospitalSearchPanel from "@/components/HospitalSearchPanel";
@@ -23,27 +23,40 @@ export default function Home() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [counselorInput, setCounselorInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [recommendations, setRecommendations] = useState<PolicyRecommendation[] | null>(null);
-  const [referral, setReferral] = useState<Referral | null>(null);
+  const [checklist, setChecklist] = useState<PolicyChecklist[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showScenarioPicker, setShowScenarioPicker] = useState(false);
   const initialized = useRef(false);
 
+  const callClassify = useCallback(async (activeScenario: string): Promise<PolicyChecklist[]> => {
+    const res = await fetch(`${API_BASE}/classify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scenario: activeScenario }),
+    });
+    if (!res.ok) throw new Error(`분류 오류 (${res.status})`);
+    const data: ClassifyResponse = await res.json();
+    return data.checklist;
+  }, []);
+
   const callChat = useCallback(
-    async (currentMessages: ChatMessage[], activeScenario: string) => {
+    async (currentMessages: ChatMessage[], activeScenario: string, currentChecklist: PolicyChecklist[]) => {
       setLoading(true);
       setError(null);
       try {
         const res = await fetch(`${API_BASE}/chat`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ scenario: activeScenario, messages: currentMessages }),
+          body: JSON.stringify({
+            scenario: activeScenario,
+            messages: currentMessages,
+            checklist: currentChecklist,
+          }),
         });
         if (!res.ok) throw new Error(`서버 오류 (${res.status})`);
         const data: ChatResponse = await res.json();
         setMessages((prev) => [...prev, { role: "citizen", content: data.citizen_message }]);
-        setRecommendations(data.recommendations);
-        setReferral(data.referral ?? null);
+        if (data.checklist.length > 0) setChecklist(data.checklist);
       } catch (err) {
         setError(err instanceof Error ? err.message : "알 수 없는 오류가 발생했습니다.");
       } finally {
@@ -57,20 +70,27 @@ export default function Home() {
     async (newScenario: string) => {
       setScenario(newScenario);
       setMessages([]);
-      setRecommendations(null);
-      setReferral(null);
+      setChecklist(null);
       setError(null);
       setShowScenarioPicker(false);
-      await callChat([], newScenario);
+      setLoading(true);
+      try {
+        const initialChecklist = await callClassify(newScenario);
+        setChecklist(initialChecklist);
+        await callChat([], newScenario, initialChecklist);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "알 수 없는 오류가 발생했습니다.");
+        setLoading(false);
+      }
     },
-    [callChat]
+    [callClassify, callChat]
   );
 
   useEffect(() => {
     if (initialized.current) return;
     initialized.current = true;
-    callChat([], DEFAULT_SCENARIO);
-  }, [callChat]);
+    startNew(DEFAULT_SCENARIO);
+  }, [startNew]);
 
   const sendCounselorMessage = useCallback(async () => {
     const content = counselorInput.trim();
@@ -78,8 +98,8 @@ export default function Home() {
     const updated: ChatMessage[] = [...messages, { role: "counselor", content }];
     setMessages(updated);
     setCounselorInput("");
-    await callChat(updated, scenario);
-  }, [counselorInput, loading, messages, callChat, scenario]);
+    await callChat(updated, scenario, checklist ?? []);
+  }, [counselorInput, loading, messages, callChat, scenario, checklist]);
 
   return (
     <div className="flex h-screen flex-col">
@@ -110,7 +130,7 @@ export default function Home() {
             />
           </div>
           <div className="flex-1 overflow-y-auto space-y-4">
-            <RecommendationPanel recommendations={recommendations} referral={referral} loading={loading} />
+            <RecommendationPanel checklist={checklist} loading={loading} />
             <HospitalSearchPanel />
           </div>
         </div>

@@ -20,6 +20,7 @@ from src.rag.pipeline import run as rag_run
 from src.rag.ingest import ingest
 from src.rag.citizen import generate_citizen_message
 from src.rag.hospital_lookup import find_nearest
+from src.rag.generator import classify, evaluate_criteria
 
 app = FastAPI(title="보건소 의료비 지원 상담 AI")
 
@@ -40,9 +41,24 @@ class ChatTurn(BaseModel):
     content: str
 
 
+class PolicyCriterion(BaseModel):
+    label: str
+    met: bool | None = None
+
+
+class PolicyChecklist(BaseModel):
+    name: str
+    criteria: list[PolicyCriterion]
+
+
 class ChatRequest(BaseModel):
     scenario: str
     messages: list[ChatTurn]
+    checklist: list[PolicyChecklist] = []
+
+
+class ClassifyRequest(BaseModel):
+    scenario: str
 
 
 class HospitalSearchRequest(BaseModel):
@@ -64,20 +80,38 @@ async def ingest_endpoint():
     return {"status": "ok", "documents_indexed": count}
 
 
+@app.post("/classify")
+async def classify_endpoint(req: ClassifyRequest):
+    if not req.scenario.strip():
+        raise HTTPException(status_code=400, detail="scenario가 비어 있습니다")
+    result = classify(req.scenario)
+    return {"checklist": result["checklist"], "token_usage": result["usage"]}
+
+
 @app.post("/chat")
 async def chat_endpoint(req: ChatRequest):
     messages_dict = [{"role": t.role, "content": t.content} for t in req.messages]
 
     citizen_message = generate_citizen_message(req.scenario, messages_dict)
 
-    all_messages = messages_dict + [{"role": "citizen", "content": citizen_message}]
-    conversation_text = "\n".join(
-        f"{'시민' if m['role'] == 'citizen' else '상담사'}: {m['content']}"
-        for m in all_messages
-    )
-    rag_result = rag_run(conversation_text)
+    checklist = [item.model_dump() for item in req.checklist]
+    token_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
 
-    return {"citizen_message": citizen_message, "recommendations": rag_result["recommendations"]}
+    if checklist and messages_dict:
+        all_messages = messages_dict + [{"role": "citizen", "content": citizen_message}]
+        conversation_text = "\n".join(
+            f"{'시민' if m['role'] == 'citizen' else '상담사'}: {m['content']}"
+            for m in all_messages
+        )
+        eval_result = evaluate_criteria(conversation_text, checklist)
+        checklist = eval_result["checklist"]
+        token_usage = eval_result["usage"]
+
+    return {
+        "citizen_message": citizen_message,
+        "checklist": checklist,
+        "token_usage": token_usage,
+    }
 
 
 @app.post("/hospital-search")

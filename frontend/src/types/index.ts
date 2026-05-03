@@ -26,10 +26,32 @@ export interface ChatMessage {
   content: string;
 }
 
+// 수정사항-1: 체크리스트 기반 정책 판단 타입
+export interface PolicyCriterion {
+  label: string;
+  met: boolean | null;
+}
+
+export interface PolicyChecklist {
+  name: string;
+  criteria: PolicyCriterion[];
+}
+
+export interface TokenUsage {
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+}
+
 export interface ChatResponse {
   citizen_message: string;
-  recommendations: PolicyRecommendation[];
-  referral?: Referral | null;
+  checklist: PolicyChecklist[];
+  token_usage: TokenUsage;
+}
+
+export interface ClassifyResponse {
+  checklist: PolicyChecklist[];
+  token_usage: TokenUsage;
 }
 
 export interface Hospital {
