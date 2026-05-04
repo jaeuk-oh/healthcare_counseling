@@ -103,10 +103,11 @@ async def classify_endpoint(req: ClassifyRequest):
 async def chat_endpoint(req: ChatRequest):
     messages_dict = [{"role": t.role, "content": t.content} for t in req.messages]
 
-    citizen_message = generate_citizen_message(req.scenario, messages_dict)
+    citizen_result = generate_citizen_message(req.scenario, messages_dict)
+    citizen_message = citizen_result["message"]
+    token_usage = citizen_result["usage"]
 
     checklist = [item.model_dump() for item in req.checklist]
-    token_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
 
     if checklist and messages_dict:
         all_messages = messages_dict + [{"role": "citizen", "content": citizen_message}]
@@ -116,7 +117,12 @@ async def chat_endpoint(req: ChatRequest):
         )
         eval_result = evaluate_criteria(conversation_text, checklist)
         checklist = eval_result["checklist"]
-        token_usage = eval_result["usage"]
+        usage = eval_result["usage"]
+        token_usage = {
+            "prompt_tokens": token_usage["prompt_tokens"] + usage["prompt_tokens"],
+            "completion_tokens": token_usage["completion_tokens"] + usage["completion_tokens"],
+            "total_tokens": token_usage["total_tokens"] + usage["total_tokens"],
+        }
 
     return {
         "citizen_message": citizen_message,

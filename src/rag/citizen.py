@@ -27,7 +27,7 @@ CITIZEN_SYSTEM = """당신은 보건소에 전화해서 의료비 지원을 문�
 - 당신은 도움을 받으러 전화한 시민입니다. 도움을 주는 역할이 아닙니다."""
 
 
-def generate_citizen_message(scenario: str, messages: list[dict]) -> str:
+def generate_citizen_message(scenario: str, messages: list[dict]) -> dict:
     client = OpenAI()
     # 시민 LLM 관점: 상담사 = user, 시민(본인) = assistant
     oai_messages = [
@@ -42,4 +42,11 @@ def generate_citizen_message(scenario: str, messages: list[dict]) -> str:
         ],
         max_tokens=200,
     )
-    return response.choices[0].message.content.strip()
+    return {
+        "message": response.choices[0].message.content.strip(),
+        "usage": {
+            "prompt_tokens": response.usage.prompt_tokens,
+            "completion_tokens": response.usage.completion_tokens,
+            "total_tokens": response.usage.total_tokens,
+        },
+    }
