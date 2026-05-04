@@ -98,6 +98,49 @@ Playwright는 실제 브라우저를 띄워 JavaScript를 실행한 뒤 결과�
 
 ---
 
+## 시스템 개선 이력
+
+### 1. 정책 판단을 매 턴 재생성하지 않고 체크리스트 방식으로 전환
+
+**문제**: 채팅 메시지를 보낼 때마다 RAG → GPT function calling으로 전체 정책 판단을 재생성했다. 판단이 매 턴 바뀌어 불안정하고, 대화가 길어질수록 토큰 비용이 선형으로 증가했다.
+
+**개선**: 2단계로 분리.
+1. 시나리오 로드 시 1회: `/classify`로 관련 정책을 분류하고 체크리스트 항목을 모두 ⬜ 미확인으로 초기화.
+2. 매 채팅 턴: `evaluate_criteria`로 대화에서 확인된 항목만 ✓/✗로 업데이트. 모든 항목이 ✓가 되면 지원 가능.
+
+**효과**: 정책 판단이 안정적으로 유지되고, 매 턴 LLM 호출이 가벼워짐.
+
+**반영 위치**:
+- `src/rag/generator.py` — `POLICY_CRITERIA`, `classify()`, `evaluate_criteria()` 추가
+- `src/api.py` — `/classify` 엔드포인트 추가, `/chat`에서 `rag_run()` 제거
+- `frontend/src/components/PolicyCard.tsx` — 체크리스트 항목별 ✓/✗/⬜ 렌더링
+
+---
+
+### 2. 시민 페르소나 다양화
+
+**문제**: 모든 시민이 동일한 프롬프트로 생성되어 말투가 균일했다. 실제 민원 전화는 말을 더듬는 사람, 단답형으로만 답하는 사람, 짜증섞인 말투 등 다양하다.
+
+**개선**: 세션 시작 시 5가지 성격 유형(말더듬, 단답형, 짜증형, 민원형, 표준형) 중 하나를 랜덤 선택해 시나리오에 `[성격: ...]` 태그로 추가. `CITIZEN_SYSTEM` 프롬프트에 성격별 말투 예시를 추가해 LLM이 반영하도록 함.
+
+**반영 위치**:
+- `frontend/src/app/page.tsx` — `PERSONALITY_TYPES`, `withPersonality()` 추가
+- `src/rag/citizen.py` — 성격 태그 해석 지침 및 말투 예시 추가
+
+---
+
+### 3. 상담 종료 버튼 + 세션 토큰 사용량 추적
+
+**목적**: 체크리스트 방식 전환 전후 토큰 사용량 변화를 실측하기 위한 관측 도구.
+
+**구현**: 상담 종료 버튼을 누르면 해당 세션의 토큰 사용량(입력/출력/합계)과 페르소나·턴수를 요약 모달로 표시하고, `logs/sessions.jsonl`에 append로 저장.
+
+**반영 위치**:
+- `src/api.py` — `/session-end` 엔드포인트 (JSONL append)
+- `frontend/src/app/page.tsx` — `sessionTokens` 누적 state, 종료 모달 UI
+
+---
+
 ## 시스템 구조
 
 ```
