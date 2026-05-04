@@ -20,9 +20,11 @@ from pydantic import BaseModel
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.rag.pipeline import run as rag_run
 from src.rag.ingest import ingest
-from src.rag.citizen import generate_citizen_message
+from src.rag.counselor import generate_counselor_response
 from src.rag.hospital_lookup import find_nearest
-from src.rag.generator import classify, evaluate_criteria
+from src.rag.generator import classify
+from src.rag.retriever import retrieve
+from src.rag.rare_disease_lookup import lookup as rare_lookup
 
 app = FastAPI(title="보건소 의료비 지원 상담 AI")
 
@@ -39,7 +41,7 @@ class QueryRequest(BaseModel):
 
 
 class ChatTurn(BaseModel):
-    role: str  # "citizen" | "counselor"
+    role: str  # "user" (시민) | "assistant" (AI 상담사)
     content: str
 
 
@@ -54,7 +56,6 @@ class PolicyChecklist(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    scenario: str
     messages: list[ChatTurn]
     checklist: list[PolicyChecklist] = []
 
@@ -102,32 +103,35 @@ async def classify_endpoint(req: ClassifyRequest):
 @app.post("/chat")
 async def chat_endpoint(req: ChatRequest):
     messages_dict = [{"role": t.role, "content": t.content} for t in req.messages]
-
-    citizen_result = generate_citizen_message(req.scenario, messages_dict)
-    citizen_message = citizen_result["message"]
-    token_usage = citizen_result["usage"]
-
     checklist = [item.model_dump() for item in req.checklist]
 
-    if checklist and messages_dict:
-        all_messages = messages_dict + [{"role": "citizen", "content": citizen_message}]
-        conversation_text = "\n".join(
-            f"{'시민' if m['role'] == 'citizen' else '상담사'}: {m['content']}"
-            for m in all_messages
-        )
-        eval_result = evaluate_criteria(conversation_text, checklist)
-        checklist = eval_result["checklist"]
-        usage = eval_result["usage"]
-        token_usage = {
-            "prompt_tokens": token_usage["prompt_tokens"] + usage["prompt_tokens"],
-            "completion_tokens": token_usage["completion_tokens"] + usage["completion_tokens"],
-            "total_tokens": token_usage["total_tokens"] + usage["total_tokens"],
-        }
+    if not messages_dict:
+        raise HTTPException(status_code=400, detail="messages가 비어 있습니다")
+
+    query = messages_dict[-1]["content"]
+    classify_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+
+    # 첫 턴: 체크리스트가 없으면 자동 분류
+    if not checklist:
+        classify_result = classify(query)
+        checklist = classify_result["checklist"]
+        classify_usage = classify_result["usage"]
+
+    policy_docs = retrieve(query)
+    rare_matches = rare_lookup(query)
+
+    counselor_result = generate_counselor_response(messages_dict, policy_docs, checklist, rare_matches)
+
+    total_usage = {
+        "prompt_tokens": classify_usage["prompt_tokens"] + counselor_result["usage"]["prompt_tokens"],
+        "completion_tokens": classify_usage["completion_tokens"] + counselor_result["usage"]["completion_tokens"],
+        "total_tokens": classify_usage["total_tokens"] + counselor_result["usage"]["total_tokens"],
+    }
 
     return {
-        "citizen_message": citizen_message,
-        "checklist": checklist,
-        "token_usage": token_usage,
+        "counselor_message": counselor_result["message"],
+        "checklist": counselor_result["checklist"],
+        "token_usage": total_usage,
     }
 
 
