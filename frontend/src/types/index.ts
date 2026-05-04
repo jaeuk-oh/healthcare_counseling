@@ -22,11 +22,10 @@ export interface QueryResponse {
 }
 
 export interface ChatMessage {
-  role: "citizen" | "counselor";
+  role: "user" | "assistant";
   content: string;
 }
 
-// 수정사항-1: 체크리스트 기반 정책 판단 타입
 export interface PolicyCriterion {
   label: string;
   met: boolean | null;
@@ -44,7 +43,7 @@ export interface TokenUsage {
 }
 
 export interface ChatResponse {
-  citizen_message: string;
+  counselor_message: string;
   checklist: PolicyChecklist[];
   token_usage: TokenUsage;
 }
