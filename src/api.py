@@ -25,6 +25,7 @@ from src.rag.hospital_lookup import find_nearest
 from src.rag.generator import classify
 from src.rag.retriever import retrieve
 from src.rag.rare_disease_lookup import lookup as rare_lookup
+from src.db import create_session, save_message, end_session
 
 app = FastAPI(title="보건소 의료비 지원 상담 AI")
 
@@ -58,6 +59,7 @@ class PolicyChecklist(BaseModel):
 class ChatRequest(BaseModel):
     messages: list[ChatTurn]
     checklist: list[PolicyChecklist] = []
+    session_id: str | None = None
 
 
 class ClassifyRequest(BaseModel):
@@ -77,6 +79,8 @@ class SessionEndRequest(BaseModel):
     prompt_tokens: int
     completion_tokens: int
     total_tokens: int
+    session_id: str | None = None
+    checklist: list[PolicyChecklist] = []
 
 
 @app.post("/query")
@@ -111,16 +115,25 @@ async def chat_endpoint(req: ChatRequest):
     query = messages_dict[-1]["content"]
     classify_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
 
-    # 첫 턴: 체크리스트가 없으면 자동 분류
+    # 첫 턴: 세션 생성 + 체크리스트 자동 분류
+    session_id = req.session_id
     if not checklist:
+        session_id = create_session(query)
         classify_result = classify(query)
         checklist = classify_result["checklist"]
         classify_usage = classify_result["usage"]
+
+    # 이번 턴의 유저 메시지 저장 (마지막 메시지)
+    last_user_index = len(messages_dict) - 1
+    save_message(session_id, last_user_index, "user", query)
 
     policy_docs = retrieve(query)
     rare_matches = rare_lookup(query)
 
     counselor_result = generate_counselor_response(messages_dict, policy_docs, checklist, rare_matches)
+
+    # AI 응답 저장
+    save_message(session_id, last_user_index + 1, "assistant", counselor_result["message"])
 
     total_usage = {
         "prompt_tokens": classify_usage["prompt_tokens"] + counselor_result["usage"]["prompt_tokens"],
@@ -132,6 +145,7 @@ async def chat_endpoint(req: ChatRequest):
         "counselor_message": counselor_result["message"],
         "checklist": counselor_result["checklist"],
         "token_usage": total_usage,
+        "session_id": session_id,
     }
 
 
@@ -148,6 +162,18 @@ async def hospital_search_endpoint(req: HospitalSearchRequest):
 
 @app.post("/session-end")
 async def session_end_endpoint(req: SessionEndRequest):
+    # Supabase 업데이트
+    end_session(
+        session_id=req.session_id,
+        personality=req.personality,
+        turns=req.turns,
+        prompt_tokens=req.prompt_tokens,
+        completion_tokens=req.completion_tokens,
+        total_tokens=req.total_tokens,
+        checklist=[item.model_dump() for item in req.checklist],
+    )
+
+    # fallback: 로컬 JSONL 로그 유지
     logs_dir = Path(__file__).parent.parent / "logs"
     logs_dir.mkdir(exist_ok=True)
     log_entry = {

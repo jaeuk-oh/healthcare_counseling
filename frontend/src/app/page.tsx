@@ -3,7 +3,6 @@
 import { useState, useCallback } from "react";
 import type { ChatMessage, PolicyChecklist, ChatResponse, TokenUsage } from "@/types";
 import CalleePanel from "@/components/CalleePanel";
-import RecommendationPanel from "@/components/RecommendationPanel";
 import HospitalSearchPanel from "@/components/HospitalSearchPanel";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -23,12 +22,13 @@ export default function Home() {
   const [userInput, setUserInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [checklist, setChecklist] = useState<PolicyChecklist[] | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sessionTokens, setSessionTokens] = useState<TokenUsage>(ZERO_USAGE);
   const [showEndModal, setShowEndModal] = useState(false);
 
   const callChat = useCallback(
-    async (currentMessages: ChatMessage[], currentChecklist: PolicyChecklist[]) => {
+    async (currentMessages: ChatMessage[], currentChecklist: PolicyChecklist[], currentSessionId: string | null) => {
       setLoading(true);
       setError(null);
       try {
@@ -38,6 +38,7 @@ export default function Home() {
           body: JSON.stringify({
             messages: currentMessages,
             checklist: currentChecklist,
+            session_id: currentSessionId,
           }),
         });
         if (!res.ok) throw new Error(`서버 오류 (${res.status})`);
@@ -47,6 +48,7 @@ export default function Home() {
           { role: "assistant", content: data.counselor_message },
         ]);
         if (data.checklist.length > 0) setChecklist(data.checklist);
+        if (data.session_id) setSessionId(data.session_id);
         setSessionTokens((prev) => addUsage(prev, data.token_usage));
       } catch (err) {
         setError(err instanceof Error ? err.message : "알 수 없는 오류가 발생했습니다.");
@@ -63,12 +65,13 @@ export default function Home() {
     const updated: ChatMessage[] = [...messages, { role: "user", content }];
     setMessages(updated);
     setUserInput("");
-    await callChat(updated, checklist ?? []);
-  }, [userInput, loading, messages, callChat, checklist]);
+    await callChat(updated, checklist ?? [], sessionId);
+  }, [userInput, loading, messages, callChat, checklist, sessionId]);
 
   const startNew = useCallback(() => {
     setMessages([]);
     setChecklist(null);
+    setSessionId(null);
     setSessionTokens(ZERO_USAGE);
     setError(null);
     setShowEndModal(false);
@@ -83,6 +86,8 @@ export default function Home() {
           scenario: messages[0]?.content ?? "",
           personality: "해당없음",
           turns: messages.length,
+          session_id: sessionId,
+          checklist: checklist ?? [],
           ...sessionTokens,
         }),
       });
@@ -90,7 +95,7 @@ export default function Home() {
       // 로그 저장 실패는 UX에 영향 없음
     }
     setShowEndModal(true);
-  }, [messages, sessionTokens]);
+  }, [messages, sessionTokens, sessionId, checklist]);
 
   return (
     <div className="flex h-screen flex-col">
@@ -120,7 +125,7 @@ export default function Home() {
 
       <main className="flex flex-1 overflow-hidden">
         <div className="mx-auto flex w-full max-w-7xl gap-4 p-4">
-          <div className="flex-1">
+          <div className="flex-[2]">
             <CalleePanel
               messages={messages}
               input={userInput}
@@ -129,8 +134,7 @@ export default function Home() {
               onSubmit={sendMessage}
             />
           </div>
-          <div className="flex-1 overflow-y-auto space-y-4">
-            <RecommendationPanel checklist={checklist} loading={loading} />
+          <div className="w-80 shrink-0 overflow-y-auto">
             <HospitalSearchPanel />
           </div>
         </div>

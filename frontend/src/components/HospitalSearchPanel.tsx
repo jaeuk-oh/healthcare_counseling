@@ -33,7 +33,7 @@ export default function HospitalSearchPanel() {
         throw new Error(data.detail ?? `서버 오류 (${res.status})`);
       }
       const data = await res.json();
-      setHospitals(data.hospitals);
+      setHospitals(Array.isArray(data.hospitals) ? data.hospitals : []); // map은 배열에만 동작한다. 그래서 haspitals를 배열 형식으로 만들어줘야함.
       setOrigin(data.origin ?? null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "오류가 발생했습니다.");

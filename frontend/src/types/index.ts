@@ -46,6 +46,7 @@ export interface ChatResponse {
   counselor_message: string;
   checklist: PolicyChecklist[];
   token_usage: TokenUsage;
+  session_id: string;
 }
 
 export interface ClassifyResponse {
