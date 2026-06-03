@@ -3,7 +3,7 @@
 import { useState, useCallback } from "react";
 import type { ChatMessage, PolicyChecklist, ChatResponse, TokenUsage } from "@/types";
 import CalleePanel from "@/components/CalleePanel";
-import HospitalSearchPanel from "@/components/HospitalSearchPanel";
+
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -132,10 +132,8 @@ export default function Home() {
               loading={loading}
               onInputChange={setUserInput}
               onSubmit={sendMessage}
+              onQuickFill={setUserInput}
             />
-          </div>
-          <div className="w-80 shrink-0 overflow-y-auto">
-            <HospitalSearchPanel />
           </div>
         </div>
       </main>

@@ -52,6 +52,7 @@ COUNSELOR_SYSTEM = """당신은 하남시 보건소의 의료비 지원 상담�
 4. 친절하고 명확한 구어체 존댓말로 답하세요 (2~4문장 내외)
 5. checklist_updates에는 이번 대화에서 새로 확인된 항목만 업데이트하세요
    이미 true/false로 확정된 항목은 null로 되돌리지 마세요
+{first_turn_rule}
 
 보건소 담당 부서 연락처:
 {contacts}
@@ -60,11 +61,17 @@ COUNSELOR_SYSTEM = """당신은 하남시 보건소의 의료비 지원 상담�
 {policy_docs}"""
 
 
+FIRST_TURN_RULE = """6. 이 대화의 첫 번째 답변입니다. 반드시 "안녕하세요! 하남시 보건소 의료비 지원 상담사입니다."로 시작하세요.
+   - 시민이 인사만 했다면 그 뒤에 "무엇을 도와드릴까요?" 를 덧붙이세요.
+   - 시민이 바로 지원 관련 질문을 했다면 인사 뒤에 바로 필요한 추가 질문이나 안내를 이어가세요."""
+
+
 def generate_counselor_response(
     messages: list[dict],
     policy_docs: list[dict],
     checklist: list[dict],
     rare_matches: list[dict] | None = None,
+    is_first_turn: bool = False,
 ) -> dict:
     client = OpenAI()
 
@@ -100,6 +107,7 @@ def generate_counselor_response(
                     contacts=get_contacts_summary(),
                     policy_docs=policy_text,
                     checklist_section=checklist_section,
+                    first_turn_rule=f"\n{FIRST_TURN_RULE}" if is_first_turn else "",
                 ),
             },
             *messages,

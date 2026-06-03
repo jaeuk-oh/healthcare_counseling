@@ -1,25 +1,26 @@
 scenarios:
   - id: S01
-    query: "암 진단받았고 소득이 없어요. 의료비 지원 받을 수 있나요?"
-    expected_policies: ["산정특례", "의료급여"]
+    query: "의료급여 수급자인데 암 진단을 받았어요. 의료비 지원 받을 수 있나요?"
+    expected_policies: ["암의료비지원", "산정특례"]
     also_acceptable: []
 
   - id: S02
     query: "희귀질환 진단받은 아이가 있는데 의료비 지원 받을 수 있나요?"
-    expected_policies: ["희귀질환의료비지원"]
-    also_acceptable: ["산정특례"]
+    expected_policies: ["희귀질환의료비지원", "산정특례"]
+    also_acceptable: []
 
   - id: S03
-    query: "장애 2급인데 의료비 부담이 너무 커요"
-    expected_policies: ["장애인의료비지원"]
+    query: "국가암검진 통보서를 받았는데 어느 병원에서 검진받으면 되나요?"
+    expected_policies: ["국가암검진"]
     also_acceptable: []
 
   - id: S04
-    query: "갑자기 큰 수술을 받았는데 의료비가 너무 많이 나왔어요"
-    expected_policies: ["재난적의료비지원"]
-    also_acceptable: []
+    query: "아이가 백혈병 진단을 받았어요. 치료비 지원이 있나요?"
+    expected_policies: ["암의료비지원"]
+    also_acceptable: ["산정특례"]
 
   - id: S05
-    query: "기초생활수급자인데 병원비 지원이 있나요?"
-    expected_policies: ["의료급여"]
+    query: "건강보험 가입자인데 위암 진단받았어요. 보건소에서 지원받을 수 있나요?"
+    expected_policies: ["암의료비지원"]
+    note: "applicable=false 케이스 — 건강보험 가입자 신규지원 중단(2021.7.1) 안내 확인용"
     also_acceptable: []

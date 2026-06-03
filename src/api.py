@@ -21,7 +21,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.rag.pipeline import run as rag_run
 from src.rag.ingest import ingest
 from src.rag.counselor import generate_counselor_response
-from src.rag.hospital_lookup import find_nearest
+
 from src.rag.generator import classify
 from src.rag.retriever import retrieve
 from src.rag.rare_disease_lookup import lookup as rare_lookup
@@ -65,11 +65,6 @@ class ChatRequest(BaseModel):
 class ClassifyRequest(BaseModel):
     scenario: str
 
-
-class HospitalSearchRequest(BaseModel):
-    address: str
-    cancer_type: str | None = None
-    top_n: int = 5
 
 
 class SessionEndRequest(BaseModel):
@@ -130,7 +125,8 @@ async def chat_endpoint(req: ChatRequest):
     policy_docs = retrieve(query)
     rare_matches = rare_lookup(query)
 
-    counselor_result = generate_counselor_response(messages_dict, policy_docs, checklist, rare_matches)
+    is_first_turn = len(messages_dict) == 1
+    counselor_result = generate_counselor_response(messages_dict, policy_docs, checklist, rare_matches, is_first_turn)
 
     # AI 응답 저장
     save_message(session_id, last_user_index + 1, "assistant", counselor_result["message"])
@@ -148,16 +144,6 @@ async def chat_endpoint(req: ChatRequest):
         "session_id": session_id,
     }
 
-
-@app.post("/hospital-search")
-async def hospital_search_endpoint(req: HospitalSearchRequest):
-    if not req.address.strip():
-        raise HTTPException(status_code=400, detail="address가 비어 있습니다")
-    hospitals_path = Path(__file__).parent / "data" / "hospitals.json"
-    if not hospitals_path.exists():
-        raise HTTPException(status_code=503, detail="병원 데이터가 아직 준비되지 않았습니다. crawl_hospitals.py를 먼저 실행하세요.")
-    results = find_nearest(req.address, req.cancer_type, req.top_n)
-    return {"hospitals": results}
 
 
 @app.post("/session-end")

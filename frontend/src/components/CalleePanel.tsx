@@ -3,12 +3,49 @@
 import { useRef, useEffect } from "react";
 import type { ChatMessage } from "@/types";
 
+const SAMPLE_QUESTIONS = [
+  {
+    label: "국가암검진",
+    questions: [
+      "검진 통보서를 받았는데 어느 병원에서 받으면 되나요?",
+      "대장암 검진인데 대변 검사를 집에서 하는 건가요?",
+      "위암 검진인데 내시경이랑 위장조영술 둘 다 해야 하나요?",
+    ],
+  },
+  {
+    label: "소아암",
+    questions: [
+      "아이가 백혈병 진단을 받았는데 치료비 지원이 있나요?",
+      "소득이 좀 있어도 소아암 지원이 되나요?",
+      "소아암 서류는 뭘 챙겨가야 하나요?",
+    ],
+  },
+  {
+    label: "성인암",
+    questions: [
+      "유방암 진단받았는데 치료비 지원이 되나요?",
+      "의료급여 수급자인데 위암 진단받았어요. 지원받을 수 있나요?",
+      "건강보험 가입자인데 대장암 지원받을 수 있나요?",
+      "2년 전에 대장암으로 지원을 받았는데 올해도 계속 받을 수 있나요?",
+    ],
+  },
+  {
+    label: "희귀질환",
+    questions: [
+      "희귀질환 진단받았는데 의료비 지원이 있나요?",
+      "산정특례 등록을 먼저 해야 하나요?",
+      "희귀질환인데 간병비도 지원이 되나요?",
+    ],
+  },
+] as const;
+
 interface CalleePanelProps {
   messages: ChatMessage[];
   input: string;
   loading: boolean;
   onInputChange: (value: string) => void;
   onSubmit: () => void;
+  onQuickFill?: (text: string) => void;
 }
 
 export default function CalleePanel({
@@ -17,6 +54,7 @@ export default function CalleePanel({
   loading,
   onInputChange,
   onSubmit,
+  onQuickFill,
 }: CalleePanelProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -43,13 +81,24 @@ export default function CalleePanel({
 
       <div className="flex-1 space-y-3 overflow-y-auto px-5 py-4">
         {messages.length === 0 && !loading && (
-          <div className="flex h-full flex-col items-center justify-center text-center text-gray-400">
-            <span className="text-4xl">💬</span>
-            <p className="mt-3 text-sm">
-              아래에 상황을 입력하시면
-              <br />
-              AI 상담사가 지원 가능한 제도를 안내해 드립니다.
-            </p>
+          <div className="flex h-full flex-col justify-center px-1 py-4">
+            <p className="mb-4 text-xs text-gray-400">자주 묻는 질문을 선택하거나 직접 입력하세요.</p>
+            {SAMPLE_QUESTIONS.map((category) => (
+              <div key={category.label} className="mb-4">
+                <p className="mb-2 text-xs font-semibold text-gray-400">{category.label}</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {category.questions.map((q) => (
+                    <button
+                      key={q}
+                      onClick={() => onQuickFill?.(q)}
+                      className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs text-gray-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
+                    >
+                      {q}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
         )}
 

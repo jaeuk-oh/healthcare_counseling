@@ -54,21 +54,3 @@ export interface ClassifyResponse {
   token_usage: TokenUsage;
 }
 
-export interface Hospital {
-  name: string;
-  phone: string;
-  cancers: string[];
-  distance_km?: number;
-  lat?: number;
-  lng?: number;
-}
-
-export interface HospitalOrigin {
-  lat: number;
-  lng: number;
-}
-
-export interface HospitalSearchResponse {
-  hospitals: Hospital[];
-  origin?: HospitalOrigin | null;
-}
