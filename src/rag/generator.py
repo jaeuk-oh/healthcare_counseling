@@ -11,7 +11,7 @@ LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o")
 
 POLICY_CRITERIA = {
     "암의료비지원": [
-        {"label": "지원 대상 암종 해당 (소아: 전체 암, 성인: 5대 국가암+폐암)", "confirmable_by": "phone"},
+        {"label": "진단 암종이 지원 범위에 해당 (소아: 전체암 / 성인: 위·대장·간·유방·자궁경부암·폐암)", "confirmable_by": "phone"},
         {"label": "의료급여 수급자 또는 차상위 본인부담 경감대상자 여부 확인", "confirmable_by": "phone"},
         {"label": "소득·재산 기준 충족 (중위소득 120% 이하)", "confirmable_by": "visit"},
     ],
