@@ -11,22 +11,22 @@ LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o")
 
 POLICY_CRITERIA = {
     "암의료비지원": [
-        "지원 대상 암종 해당 (소아: 전체 암, 성인: 5대 국가암+폐암)",
-        "의료급여 수급자 또는 차상위 본인부담 경감대상자 여부 확인",
-        "소득·재산 기준 충족 (중위소득 120% 이하)",
+        {"label": "지원 대상 암종 해당 (소아: 전체 암, 성인: 5대 국가암+폐암)", "confirmable_by": "phone"},
+        {"label": "의료급여 수급자 또는 차상위 본인부담 경감대상자 여부 확인", "confirmable_by": "phone"},
+        {"label": "소득·재산 기준 충족 (중위소득 120% 이하)", "confirmable_by": "visit"},
     ],
     "희귀질환의료비지원": [
-        "희귀질환 코드(KCD) 해당 여부 확인",
-        "건강보험 가입 또는 의료급여 수급자 여부 확인",
-        "소득 기준 충족 여부 확인",
+        {"label": "희귀질환 코드(KCD) 해당 여부 확인", "confirmable_by": "phone"},
+        {"label": "건강보험 가입 또는 의료급여 수급자 여부 확인", "confirmable_by": "phone"},
+        {"label": "소득 기준 충족 여부 확인", "confirmable_by": "visit"},
     ],
     "산정특례": [
-        "건강보험 가입 여부 확인",
-        "산정특례 대상 질환(암·희귀질환 등) 진단 여부",
+        {"label": "건강보험 가입 여부 확인", "confirmable_by": "phone"},
+        {"label": "산정특례 대상 질환(암·희귀질환 등) 진단 여부", "confirmable_by": "phone"},
     ],
     "국가암검진": [
-        "검진 대상 연령·암종 해당 여부",
-        "건강보험 가입 또는 의료급여 수급자 여부 확인",
+        {"label": "검진 대상 연령·암종 해당 여부", "confirmable_by": "phone"},
+        {"label": "건강보험 가입 또는 의료급여 수급자 여부 확인", "confirmable_by": "phone"},
     ],
 }
 
@@ -76,7 +76,7 @@ def classify(scenario: str) -> dict:
     checklist = [
         {
             "name": policy,
-            "criteria": [{"label": label, "met": None} for label in POLICY_CRITERIA[policy]],
+            "criteria": [{"label": c["label"], "confirmable_by": c["confirmable_by"], "met": None} for c in POLICY_CRITERIA[policy]],
         }
         for policy in relevant
         if policy in POLICY_CRITERIA
@@ -148,7 +148,10 @@ def evaluate_criteria(conversation: str, checklist: list[dict]) -> dict:
 
     checklist_text = "\n".join(
         f"[{item['name']}]\n"
-        + "\n".join(f"  - {c['label']} (현재: {c['met']})" for c in item["criteria"])
+        + "\n".join(
+            f"  - [{c.get('confirmable_by', 'phone').upper()}] {c['label']} (현재: {c['met']})"
+            for c in item["criteria"]
+        )
         for item in checklist
     )
 
@@ -176,11 +179,14 @@ def evaluate_criteria(conversation: str, checklist: list[dict]) -> dict:
         criteria_updates = updates_by_name.get(name, {})
         updated_criteria = []
         for c in item["criteria"]:
+            if c.get("confirmable_by") == "visit":
+                updated_criteria.append({"label": c["label"], "confirmable_by": "visit", "met": None})
+                continue
             new_met = criteria_updates.get(c["label"], c["met"])
             # 확정된 값(true/false)은 null로 되돌리지 않음
             if c["met"] is not None and new_met is None:
                 new_met = c["met"]
-            updated_criteria.append({"label": c["label"], "met": new_met})
+            updated_criteria.append({"label": c["label"], "confirmable_by": c.get("confirmable_by", "phone"), "met": new_met})
         updated_checklist.append({"name": name, "criteria": updated_criteria})
 
     return {

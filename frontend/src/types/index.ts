@@ -29,6 +29,7 @@ export interface ChatMessage {
 export interface PolicyCriterion {
   label: string;
   met: boolean | null;
+  confirmable_by: "phone" | "visit";
 }
 
 export interface PolicyChecklist {
