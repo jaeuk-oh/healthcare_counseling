@@ -161,7 +161,20 @@ Playwright는 실제 브라우저를 띄워 JavaScript를 실행한 뒤 결과�
 
 ---
 
-### 5. 상담 종료 버튼 + 세션 토큰 사용량 추적
+### 5. visit 항목 강제 None 하네스 복구 — Pydantic 모델 누락 버그 수정
+
+**설계 의도**: 소득·재산 기준은 전화로 절대 판정할 수 없는 시스템 불변조건이므로, LLM 출력과 관계없이 항상 `met: null`을 유지하도록 `counselor.py` merge 로직에서 코드 레벨로 강제했다.
+
+**버그**: `api.py`의 `PolicyCriterion` Pydantic 모델에 `confirmable_by` 필드가 없어, 클라이언트가 `{"confirmable_by": "visit"}` 를 포함해 보내도 Pydantic이 묵묵히 제거했다. 결과적으로 `counselor.py`의 `c.get("confirmable_by") == "visit"` 조건이 항상 False가 되어 **visit 강제 None 로직이 한 번도 실행되지 않고 있었다**.
+
+**수정**: `PolicyCriterion` 모델에 `confirmable_by: str = "phone"` 필드 추가. 이제 클라이언트 → API → counselor.py 전 구간에서 `confirmable_by`가 보존된다.
+
+**반영 위치**:
+- `src/api.py` — `PolicyCriterion` Pydantic 모델에 `confirmable_by` 필드 추가
+
+---
+
+### 6. 상담 종료 버튼 + 세션 토큰 사용량 추적
 
 **목적**: 체크리스트 방식 전환 전후 토큰 사용량 변화를 실측하기 위한 관측 도구.
 

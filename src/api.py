@@ -49,6 +49,7 @@ class ChatTurn(BaseModel):
 class PolicyCriterion(BaseModel):
     label: str
     met: bool | None = None
+    confirmable_by: str = "phone"
 
 
 class PolicyChecklist(BaseModel):
