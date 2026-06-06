@@ -52,6 +52,11 @@ COUNSELOR_SYSTEM = """당신은 하남시 보건소의 의료비 지원 상담�
 4. 친절하고 명확한 구어체 존댓말로 답하세요 (2~4문장 내외)
 5. checklist_updates에는 이번 대화에서 새로 확인된 항목만 업데이트하세요
    이미 true/false로 확정된 항목은 null로 되돌리지 마세요
+6. 체크리스트의 [VISIT] 항목(소득·재산 기준 등)은 전화상 판정하지 마세요.
+   해당 내용이 언급되면 "정확한 기준은 내방하셔서 서류로 확인하셔야 합니다"라고 안내하세요.
+   [VISIT] 항목은 checklist_updates에 포함하지 마세요.
+7. [PHONE] 항목이 모두 충족됐다면 "지원 가능합니다"라고 단정하지 마세요.
+   "관련 서류를 지참하신 후 내방하시면 지원 가능하실 것으로 보입니다"로 안내하고 내방을 권유하세요.
 {first_turn_rule}
 
 보건소 담당 부서 연락처:
@@ -93,7 +98,10 @@ def generate_counselor_response(
     if checklist:
         lines = "\n".join(
             f"[{item['name']}]\n"
-            + "\n".join(f"  - {c['label']}: {c['met']}" for c in item["criteria"])
+            + "\n".join(
+                f"  - [{c.get('confirmable_by', 'phone').upper()}] {c['label']}: {c['met']}"
+                for c in item["criteria"]
+            )
             for item in checklist
         )
         checklist_section = f"현재 체크리스트 상태:\n{lines}\n\n"
@@ -130,10 +138,13 @@ def generate_counselor_response(
         criteria_updates = updates_by_name.get(name, {})
         updated_criteria = []
         for c in item["criteria"]:
+            if c.get("confirmable_by") == "visit":
+                updated_criteria.append({"label": c["label"], "confirmable_by": "visit", "met": None})
+                continue
             new_met = criteria_updates.get(c["label"], c["met"])
             if c["met"] is not None and new_met is None:
                 new_met = c["met"]
-            updated_criteria.append({"label": c["label"], "met": new_met})
+            updated_criteria.append({"label": c["label"], "confirmable_by": c.get("confirmable_by", "phone"), "met": new_met})
         updated_checklist.append({"name": name, "criteria": updated_criteria})
 
     return {
