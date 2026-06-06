@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import type { ChatMessage, PolicyChecklist, ChatResponse, TokenUsage } from "@/types";
 import CalleePanel from "@/components/CalleePanel";
+import RecommendationPanel from "@/components/RecommendationPanel";
 
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -134,6 +135,9 @@ export default function Home() {
               onSubmit={sendMessage}
               onQuickFill={setUserInput}
             />
+          </div>
+          <div className="flex-1">
+            <RecommendationPanel checklist={checklist} loading={loading} />
           </div>
         </div>
       </main>
