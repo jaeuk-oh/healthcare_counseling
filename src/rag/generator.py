@@ -93,54 +93,6 @@ def classify(scenario: str) -> dict:
     }
 
 
-# ---------------------------------------------------------------------------
-# /chat — 대화 기반 체크리스트 항목 업데이트
-# ---------------------------------------------------------------------------
-
-EVALUATE_FUNCTION = {
-    "name": "update_checklist",
-    "description": "대화 내용을 바탕으로 각 정책의 체크리스트 항목 충족 여부를 업데이트합니다",
-    "parameters": {
-        "type": "object",
-        "required": ["updates"],
-        "properties": {
-            "updates": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "required": ["policy_name", "criteria"],
-                    "properties": {
-                        "policy_name": {"type": "string"},
-                        "criteria": {
-                            "type": "array",
-                            "items": {
-                                "type": "object",
-                                "required": ["label", "met"],
-                                "properties": {
-                                    "label": {"type": "string"},
-                                    "met": {"type": ["boolean", "null"]},
-                                },
-                            },
-                        },
-                    },
-                },
-            }
-        },
-    },
-}
-
-EVALUATE_SYSTEM = """당신은 보건소 의료비 지원 정책 전문가입니다.
-대화 내용을 보고 각 정책의 체크리스트 항목이 충족되는지 판단하세요.
-
-판단 기준:
-- met: true  = 대화에서 해당 항목이 충족됨이 확인됨
-- met: false = 대화에서 해당 항목이 충족되지 않음이 확인됨
-- met: null  = 아직 대화에서 확인할 수 없음
-
-규칙:
-1. 이미 true/false로 확정된 항목은 null로 되돌리지 마세요
-2. 대화에서 명확히 확인된 경우에만 true/false를 부여하세요
-3. 성인암의료비지원 — 건강보험 가입자는 신규 신청 기한(2023.6.30)이 종료됐으므로 의료급여수급자가 아니면 met: false"""
 
 
 # ---------------------------------------------------------------------------
