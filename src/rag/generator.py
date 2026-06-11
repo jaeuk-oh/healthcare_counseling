@@ -20,10 +20,6 @@ POLICY_CRITERIA = {
         {"label": "건강보험 가입 또는 의료급여 수급자 여부 확인", "confirmable_by": "phone"},
         {"label": "소득 기준 충족 여부 확인", "confirmable_by": "visit"},
     ],
-    "산정특례": [
-        {"label": "건강보험 가입 여부 확인", "confirmable_by": "phone"},
-        {"label": "산정특례 대상 질환(암·희귀질환 등) 진단 여부", "confirmable_by": "phone"},
-    ],
     "국가암검진": [
         {"label": "검진 대상 연령·암종 해당 여부", "confirmable_by": "phone"},
         {"label": "건강보험 가입 또는 의료급여 수급자 여부 확인", "confirmable_by": "phone"},
