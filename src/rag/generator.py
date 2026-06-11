@@ -6,14 +6,19 @@ from .contacts_lookup import get_contacts_summary
 LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o")
 
 # ---------------------------------------------------------------------------
-# 수정사항-1: 정책별 체크리스트 항목 (하드코딩)
+# 정책별 체크리스트 항목 (하드코딩)
 # ---------------------------------------------------------------------------
 
 POLICY_CRITERIA = {
-    "암의료비지원": [
+    "성인암의료비지원": [
         {"label": "보험 유형 확인 (의료급여·차상위 / 건강보험)", "confirmable_by": "phone"},
-        {"label": "진단 암종이 지원 범위에 해당 (소아: 전체암 / 성인: 위·대장·간·유방·자궁경부암·폐암)", "confirmable_by": "phone"},
+        {"label": "진단 암종이 지원 범위에 해당 (위·대장·간·유방·자궁경부암·폐암)", "confirmable_by": "phone"},
         {"label": "소득·재산 기준 충족 (중위소득 120% 이하)", "confirmable_by": "visit"},
+    ],
+    "소아암의료비지원": [
+        {"label": "나이 확인 (지원신청일 기준 만 18세 미만)", "confirmable_by": "phone"},
+        {"label": "보험 유형 확인 (건강보험 / 의료급여·차상위)", "confirmable_by": "phone"},
+        {"label": "소득·재산 기준 충족 (건강보험 가입자만 해당 — 의료급여 수급자는 당연 선정)", "confirmable_by": "visit"},
     ],
     "희귀질환의료비지원": [
         {"label": "희귀질환 코드(KCD) 해당 여부 확인", "confirmable_by": "phone"},
@@ -135,64 +140,7 @@ EVALUATE_SYSTEM = """당신은 보건소 의료비 지원 정책 전문가입니
 규칙:
 1. 이미 true/false로 확정된 항목은 null로 되돌리지 마세요
 2. 대화에서 명확히 확인된 경우에만 true/false를 부여하세요
-3. 암의료비지원 — 건강보험 가입자는 2021년 이후 신규 신청 불가이므로 의료급여수급자가 아니면 met: false
-4. 산정특례 — 암 진단 + 건강보험 가입자면 원칙적으로 해당됨"""
-
-
-def evaluate_criteria(conversation: str, checklist: list[dict]) -> dict:
-    client = OpenAI()
-
-    checklist_text = "\n".join(
-        f"[{item['name']}]\n"
-        + "\n".join(
-            f"  - [{c.get('confirmable_by', 'phone').upper()}] {c['label']} (현재: {c['met']})"
-            for c in item["criteria"]
-        )
-        for item in checklist
-    )
-
-    response = client.chat.completions.create(
-        model=LLM_MODEL,
-        messages=[
-            {"role": "system", "content": EVALUATE_SYSTEM},
-            {"role": "user", "content": f"체크리스트:\n{checklist_text}\n\n대화:\n{conversation}"},
-        ],
-        tools=[{"type": "function", "function": EVALUATE_FUNCTION}],
-        tool_choice={"type": "function", "function": {"name": "update_checklist"}},
-    )
-
-    tool_call = response.choices[0].message.tool_calls[0]
-    result = json.loads(tool_call.function.arguments)
-
-    updates_by_name = {
-        u["policy_name"]: {c["label"]: c["met"] for c in u["criteria"]}
-        for u in result.get("updates", [])
-    }
-
-    updated_checklist = []
-    for item in checklist:
-        name = item["name"]
-        criteria_updates = updates_by_name.get(name, {})
-        updated_criteria = []
-        for c in item["criteria"]:
-            if c.get("confirmable_by") == "visit":
-                updated_criteria.append({"label": c["label"], "confirmable_by": "visit", "met": None})
-                continue
-            new_met = criteria_updates.get(c["label"], c["met"])
-            # 확정된 값(true/false)은 null로 되돌리지 않음
-            if c["met"] is not None and new_met is None:
-                new_met = c["met"]
-            updated_criteria.append({"label": c["label"], "confirmable_by": c.get("confirmable_by", "phone"), "met": new_met})
-        updated_checklist.append({"name": name, "criteria": updated_criteria})
-
-    return {
-        "checklist": updated_checklist,
-        "usage": {
-            "prompt_tokens": response.usage.prompt_tokens,
-            "completion_tokens": response.usage.completion_tokens,
-            "total_tokens": response.usage.total_tokens,
-        },
-    }
+3. 성인암의료비지원 — 건강보험 가입자는 신규 신청 기한(2023.6.30)이 종료됐으므로 의료급여수급자가 아니면 met: false"""
 
 
 # ---------------------------------------------------------------------------
@@ -242,7 +190,7 @@ RECOMMEND_FUNCTION = {
     },
 }
 
-SYSTEM_PROMPT = """당신은 보건소 의료비 지원 정책 전문 상담 보조 AI입니다.
+SYSTEM_PROMPT = """당신은 보건소 의료비 지원 및 국가암검진 안내 전문 상담 보조 AI입니다.
 아래 제공된 정책 문서만을 근거로 상담자의 상황에 맞는 정책을 판단합니다.
 
 규칙:
@@ -250,7 +198,7 @@ SYSTEM_PROMPT = """당신은 보건소 의료비 지원 정책 전문 상담 보
 2. 문서에 없는 내용을 추론하거나 추가하지 마세요
 3. applicable=true인 정책만 source_excerpts를 포함하세요
 4. article 필드에는 해당 문서의 법령 조항 번호를 기재하세요
-5. 의료비 지원과 전혀 무관한 상담(예: 예방접종, 정신건강, 치매, 모자보건 등)은
+5. 국가암검진·의료비 지원과 전혀 무관한 상담(예: 예방접종, 정신건강, 치매, 모자보건 등)은
    recommendations를 빈 배열로 두고 referral에 아래 담당 부서 중 가장 적합한 곳을 기재하세요
 6. applicable 필드는 반드시 eligibility_reasoning의 최종 판단과 일치해야 합니다.
    reasoning에서 지원 불가, 신청 불가, 중단, 해당 없음이라고 판단했다면 applicable은 반드시 false입니다.
