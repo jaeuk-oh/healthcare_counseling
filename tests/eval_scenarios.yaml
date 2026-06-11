@@ -1,7 +1,7 @@
 scenarios:
   - id: S01
     query: "의료급여 수급자인데 암 진단을 받았어요. 의료비 지원 받을 수 있나요?"
-    expected_policies: ["성인암의료비지원"]
+    expected_policies: ["암의료비지원"]
     also_acceptable: []
 
   - id: S02
@@ -16,7 +16,7 @@ scenarios:
 
   - id: S04
     query: "아이가 백혈병 진단을 받았어요. 치료비 지원이 있나요?"
-    expected_policies: ["소아암의료비지원"]
+    expected_policies: ["암의료비지원"]
     also_acceptable: []
 
   - id: S05
