@@ -1,26 +1,66 @@
 scenarios:
+  # 성인암 — 의료급여
   - id: S01
     query: "의료급여 수급자인데 암 진단을 받았어요. 의료비 지원 받을 수 있나요?"
     expected_policies: ["암의료비지원"]
     also_acceptable: []
 
+  # 성인암 — 건보, 조건 미충족 (2025년 진단)
   - id: S02
+    query: "건강보험 가입자인데 위암 진단받았어요. 보건소에서 지원받을 수 있나요?"
+    expected_policies: []
+    note: "건강보험 가입자, 진단일 조건(2023.6.30) 미충족 — 지원 불가"
+    also_acceptable: []
+
+  # 성인암 — 건보, 조건 충족 (2020년 수검 + 2022년 진단)
+  - id: S03
+    query: "건강보험 가입자인데 2020년에 국가암검진을 받았고 2022년에 위암 진단을 받았어요."
+    expected_policies: ["암의료비지원"]
+    note: "건강보험 가입자이지만 수검일·진단일 조건 충족 — 보험료 기준 확인 후 지원 가능"
+    also_acceptable: []
+
+  # 성인암 — 건보, 지원 대상 외 암종
+  - id: S04
+    query: "건강보험 가입자인데 갑상선암 진단받았어요. 보건소 암 지원이 가능한가요?"
+    expected_policies: []
+    note: "갑상선암은 성인암 지원 대상 외 암종"
+    also_acceptable: []
+
+  # 소아암 — 의료급여 (당연선정)
+  - id: S05
+    query: "의료급여 수급자인데 10살 아이가 백혈병 진단을 받았어요."
+    expected_policies: ["암의료비지원"]
+    note: "소아 의료급여 수급자 — 당연선정, 소득·재산 기준 미적용"
+    also_acceptable: []
+
+  # 소아암 — 건보가입자
+  - id: S06
+    query: "건강보험 가입자인데 8살 아이가 뇌종양 진단을 받았어요. 지원받을 수 있나요?"
+    expected_policies: ["암의료비지원"]
+    note: "소아 건보가입자 — 성인 건보 cutoff 조건 미적용, 소득·재산 확인 후 지원 가능"
+    also_acceptable: []
+
+  # 희귀질환 — 성인 건보가입자
+  - id: S07
     query: "희귀질환 진단받은 아이가 있는데 의료비 지원 받을 수 있나요?"
     expected_policies: ["희귀질환의료비지원"]
     also_acceptable: []
 
-  - id: S03
+  # 희귀질환 — 성인
+  - id: S08
+    query: "파브리병 진단을 받았어요. 의료비 지원이 있나요?"
+    expected_policies: ["희귀질환의료비지원"]
+    also_acceptable: []
+
+  # 국가암검진
+  - id: S09
     query: "국가암검진 통보서를 받았는데 어느 병원에서 검진받으면 되나요?"
     expected_policies: ["국가암검진"]
     also_acceptable: []
 
-  - id: S04
-    query: "아이가 백혈병 진단을 받았어요. 치료비 지원이 있나요?"
-    expected_policies: ["암의료비지원"]
-    also_acceptable: []
-
-  - id: S05
-    query: "건강보험 가입자인데 위암 진단받았어요. 보건소에서 지원받을 수 있나요?"
+  # 범위 외 (예방접종 등)
+  - id: S10
+    query: "독감 예방접종은 어디서 받을 수 있나요?"
     expected_policies: []
-    note: "건강보험 가입자 신규지원 기한(2023.6.30) 종료 — applicable:false가 올바른 응답"
+    note: "의료비 지원·국가암검진과 무관 — referral 응답이 올바른 동작"
     also_acceptable: []

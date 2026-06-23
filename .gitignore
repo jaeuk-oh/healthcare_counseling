@@ -10,3 +10,4 @@ frontend/.next/
 *.tsbuildinfo
 .health_venv/
 logs/
+project-summary.md

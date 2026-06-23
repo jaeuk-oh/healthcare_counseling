@@ -36,7 +36,6 @@ def main():
     with open(SCENARIOS_FILE, encoding="utf-8") as f:
         scenarios = yaml.safe_load(f)["scenarios"]
 
-    # 서버 상태 확인
     try:
         requests.get(f"{API_URL}/health", timeout=5).raise_for_status()
     except Exception:

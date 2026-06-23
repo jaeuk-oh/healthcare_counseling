@@ -13,7 +13,9 @@ POLICY_CRITERIA = {
     "성인암의료비지원": [
         {"label": "보험 유형 확인 (의료급여·차상위 / 건강보험)", "confirmable_by": "phone"},
         {"label": "진단 암종이 지원 범위에 해당 (위·대장·간·유방·자궁경부암·폐암)", "confirmable_by": "phone"},
-        {"label": "소득·재산 기준 충족 (중위소득 120% 이하)", "confirmable_by": "visit"},
+        {"label": "국가암검진 수검일 확인 (건강보험 가입자만 — 2021.6.30 이전 수검?)", "confirmable_by": "phone"},
+        {"label": "암 진단일 확인 (건강보험 가입자만 — 2023.6.30 이전 진단?)", "confirmable_by": "phone"},
+        {"label": "건강보험료 기준 충족 (건강보험 가입자만 — 직장 127,500원 이하 / 지역 60,000원 이하)", "confirmable_by": "visit"},
     ],
     "소아암의료비지원": [
         {"label": "나이 확인 (지원신청일 기준 만 18세 미만)", "confirmable_by": "phone"},
@@ -168,7 +170,6 @@ RARE_DISEASE_SECTION = """희귀질환 코드 조회 결과:
 (위 질환은 희귀질환자 의료비지원사업 공식 대상 질환입니다. 판단 시 참고하세요.)
 
 """
-
 
 def generate(query: str, policy_docs: list[dict], rare_matches: list[dict] | None = None) -> dict:
     client = OpenAI()
