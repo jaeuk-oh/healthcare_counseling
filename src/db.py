@@ -81,6 +81,28 @@ def save_suggestion_feedback(
         print(f"[db] save_suggestion_feedback 실패: {e}", file=sys.stderr)
 
 
+def fetch_suggestion_feedback(limit: int = 1000) -> list[dict]:
+    """저장된 HITL 피드백 로그를 Supabase에서 조회한다 (분석 파이프라인용).
+
+    미설정 시 빈 리스트를 반환한다.
+    """
+    client = _get_client()
+    if not client:
+        return []
+    try:
+        result = (
+            client.table("suggestion_feedback")
+            .select("*")
+            .order("turn_index")
+            .limit(limit)
+            .execute()
+        )
+        return result.data or []
+    except Exception as e:
+        print(f"[db] fetch_suggestion_feedback 실패: {e}", file=sys.stderr)
+        return []
+
+
 def end_session(
     session_id: str,
     personality: str,

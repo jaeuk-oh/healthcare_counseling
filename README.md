@@ -89,6 +89,25 @@ AI 출력은 시민에게 직행하지 않습니다. `suggested_reply`는 **제�
 
 이 로그가 갖는 의미는 단순 감사(audit)가 아닙니다. **AI 제안 대비 상담사의 수정 내역**은 곧 "AI가 어디서 자주 틀리거나 부족한가"의 신호이므로, 반복되는 수정 패턴을 모으면 코드 레벨 가드레일(아래)에 추가할 **오류 케이스 후보**가 데이터로 도출됩니다. 지금은 개발자가 수작업으로 찾아 넣는 엣지케이스를, 현장 사용 로그로부터 발굴하는 루프의 시작점입니다.
 
+**오류 케이스 발굴 파이프라인 (`scripts/analyze_feedback.py`)**
+
+로그를 실제 후보로 전환하는 분석기입니다. `difflib`로 제안(`suggested_reply`)과 상담사 최종본(`final_reply`)을 비교해:
+
+- **상담사가 뺀 표현** → *과잉·부정확 표현 후보* (코드 가드레일 `INELIGIBLE_SIGNALS`·프롬프트 금지 규칙에 추가할 키워드)
+- **상담사가 보탠 표현** → *누락 정보 후보* (정책 문서·프롬프트 보강 대상)
+- **무시된(rejected) 제안** → *방향 자체가 틀린 케이스*
+
+를 빈도순으로 집계하고, 제안 채택률·수정율을 함께 냅니다. 코어는 외부 의존 없이 돌아가며(`--input` JSONL / `--supabase`), `--llm` 플래그를 주면 OpenAI가 수정·무시 사례를 오류 유형으로 군집화하고 가드레일 규칙 후보까지 제안합니다.
+
+```bash
+python scripts/analyze_feedback.py                 # logs/suggestion_feedback.jsonl 분석
+python scripts/analyze_feedback.py --supabase      # Supabase에서 조회
+python scripts/analyze_feedback.py --llm           # LLM 군집화 + 규칙 제안
+python scripts/analyze_feedback.py --json out.json # 머신용 리포트 저장
+```
+
+이로써 채널코퍼레이션식 "대화 데이터 기반 오류 제어"의 폐루프가 성립합니다: **상담사 수정 → 로그 → 패턴 발굴 → 가드레일 강화 → 다음 제안 품질 개선.**
+
 ---
 
 ## 핵심 설계: 도메인 지식을 코드로 강제한 3가지 가드레일
@@ -201,8 +220,8 @@ LLM이 근거(reasoning)로는 "신규지원 중단"을 인정하면서도 결�
 **다음 단계**
 - ~~평가 시나리오 확장 및 측정 결과 README 반영~~ ✅ 완료
 - ~~상담사 보조(co-pilot) 백엔드 전환 — `suggested_reply`/`counselor_note` 분리 + HITL 피드백 로그~~ ✅ 완료
+- ~~`/suggestion-feedback` 로그 분석 → 반복 수정 패턴에서 오류 케이스 자동 후보 도출~~ ✅ 완료 (`scripts/analyze_feedback.py`)
 - 프론트엔드를 시민 챗 → **상담사 대시보드**(제안 채택/수정 UI + `counselor_note`·근거 표시)로 전환
-- `/suggestion-feedback` 로그 분석 → 반복 수정 패턴에서 오류 케이스 자동 후보 도출
 - `/query` eval S03/S09 분류 버그 수정:
   - S03: "국가암검진을 받았고 위암 진단" 쿼리를 국가암검진으로 오분류 → SYSTEM_PROMPT에 구분 규칙 추가 필요
   - S09: 국가암검진 통보서 문의를 applicable:false 처리 → RECOMMEND_FUNCTION 설명 개선 필요
