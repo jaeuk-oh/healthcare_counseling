@@ -1,9 +1,15 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import type { ChatMessage, PolicyChecklist, ChatResponse, TokenUsage } from "@/types";
+import type { ChatMessage, PolicyChecklist, ChatResponse, TokenUsage, SuggestionAction } from "@/types";
 import CalleePanel from "@/components/CalleePanel";
 import RecommendationPanel from "@/components/RecommendationPanel";
+
+interface PendingSuggestion {
+  suggestedReply: string;
+  counselorNote: string;
+  turnIndex: number;
+}
 
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -27,6 +33,7 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [sessionTokens, setSessionTokens] = useState<TokenUsage>(ZERO_USAGE);
   const [showEndModal, setShowEndModal] = useState(false);
+  const [pending, setPending] = useState<PendingSuggestion | null>(null);
 
   const callChat = useCallback(
     async (currentMessages: ChatMessage[], currentChecklist: PolicyChecklist[], currentSessionId: string | null) => {
@@ -44,10 +51,12 @@ export default function Home() {
         });
         if (!res.ok) throw new Error(`서버 오류 (${res.status})`);
         const data: ChatResponse = await res.json();
-        setMessages((prev) => [
-          ...prev,
-          { role: "assistant", content: data.counselor_message },
-        ]);
+        // 응답을 시민에게 직행시키지 않고, 상담사 검수 대기(제안) 상태로 둔다.
+        setPending({
+          suggestedReply: data.suggested_reply ?? data.counselor_message,
+          counselorNote: data.counselor_note ?? "",
+          turnIndex: currentMessages.length, // 상담사 발화가 들어갈 위치
+        });
         if (data.checklist.length > 0) setChecklist(data.checklist);
         if (data.session_id) setSessionId(data.session_id);
         setSessionTokens((prev) => addUsage(prev, data.token_usage));
@@ -62,12 +71,45 @@ export default function Home() {
 
   const sendMessage = useCallback(async () => {
     const content = userInput.trim();
-    if (!content || loading) return;
+    if (!content || loading || pending) return;
     const updated: ChatMessage[] = [...messages, { role: "user", content }];
     setMessages(updated);
     setUserInput("");
     await callChat(updated, checklist ?? [], sessionId);
-  }, [userInput, loading, messages, callChat, checklist, sessionId]);
+  }, [userInput, loading, pending, messages, callChat, checklist, sessionId]);
+
+  // 상담사가 AI 제안을 채택/수정/무시 → HITL 로그 기록 + 최종 발화를 대화에 반영
+  const resolveSuggestion = useCallback(
+    async (action: SuggestionAction, finalText: string) => {
+      if (!pending) return;
+      const suggested = pending.suggestedReply;
+      const turnIndex = pending.turnIndex;
+
+      // 상담사가 실제로 발화한 문구만 대화 이력(assistant)에 반영
+      if (finalText.trim()) {
+        setMessages((prev) => [...prev, { role: "assistant", content: finalText }]);
+      }
+      setPending(null);
+
+      // 피드백 로깅 (실패해도 상담 흐름에는 영향 없음)
+      try {
+        await fetch(`${API_BASE}/suggestion-feedback`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            session_id: sessionId,
+            turn_index: turnIndex,
+            suggested_reply: suggested,
+            final_reply: finalText,
+            action,
+          }),
+        });
+      } catch {
+        // 로깅 실패는 UX에 영향 없음
+      }
+    },
+    [pending, sessionId]
+  );
 
   const startNew = useCallback(() => {
     setMessages([]);
@@ -76,6 +118,7 @@ export default function Home() {
     setSessionTokens(ZERO_USAGE);
     setError(null);
     setShowEndModal(false);
+    setPending(null);
   }, []);
 
   const endSession = useCallback(async () => {
@@ -103,8 +146,8 @@ export default function Home() {
       <header className="shrink-0 border-b border-gray-200 bg-white px-6 py-3 shadow-sm">
         <div className="mx-auto flex max-w-7xl items-center justify-between">
           <div>
-            <h1 className="text-lg font-bold text-gray-900">보건소 의료비 지원 상담 AI</h1>
-            <p className="mt-0.5 text-xs text-gray-500">상황을 입력하시면 지원 가능한 제도를 안내해 드립니다.</p>
+            <h1 className="text-lg font-bold text-gray-900">보건소 의료비 지원 상담사 보조 AI</h1>
+            <p className="mt-0.5 text-xs text-gray-500">AI가 답변을 제안하고, 상담사가 검수해 시민에게 발화합니다.</p>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -131,8 +174,10 @@ export default function Home() {
               messages={messages}
               input={userInput}
               loading={loading}
+              suggestion={pending}
               onInputChange={setUserInput}
               onSubmit={sendMessage}
+              onResolve={resolveSuggestion}
               onQuickFill={setUserInput}
             />
           </div>
