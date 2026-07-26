@@ -52,6 +52,35 @@ def save_message(session_id: str, turn_index: int, role: str, content: str) -> N
         print(f"[db] save_message 실패: {e}", file=sys.stderr)
 
 
+def save_suggestion_feedback(
+    session_id: str | None,
+    turn_index: int,
+    suggested_reply: str,
+    final_reply: str,
+    action: str,
+) -> None:
+    """상담사가 AI 제안을 채택/수정/무시한 내역(HITL 로그)을 저장한다.
+
+    action: "accepted" | "edited" | "rejected"
+    - accepted: 상담사가 제안을 그대로 사용
+    - edited:   상담사가 제안을 수정해 사용 (final_reply에 수정본)
+    - rejected: 상담사가 제안을 쓰지 않음
+    """
+    client = _get_client()
+    if not client or not session_id:
+        return
+    try:
+        client.table("suggestion_feedback").insert({
+            "session_id": session_id,
+            "turn_index": turn_index,
+            "suggested_reply": suggested_reply,
+            "final_reply": final_reply,
+            "action": action,
+        }).execute()
+    except Exception as e:
+        print(f"[db] save_suggestion_feedback 실패: {e}", file=sys.stderr)
+
+
 def end_session(
     session_id: str,
     personality: str,

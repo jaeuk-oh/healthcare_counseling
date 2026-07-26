@@ -7,14 +7,18 @@ LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o")
 
 COUNSELOR_FUNCTION = {
     "name": "counselor_response",
-    "description": "보건소 의료비 지원 상담사로서 시민에게 답변하고 체크리스트를 업데이트합니다",
+    "description": "보건소 상담사를 보조하는 AI로서, 상담사가 시민에게 할 답변을 제안하고 체크리스트를 업데이트합니다",
     "parameters": {
         "type": "object",
-        "required": ["message", "checklist_updates"],
+        "required": ["suggested_reply", "checklist_updates"],
         "properties": {
-            "message": {
+            "suggested_reply": {
                 "type": "string",
-                "description": "시민에게 전달할 상담사 답변 (구어체 존댓말)",
+                "description": "상담사가 시민에게 그대로 읽어줄 수 있는 제안 답변 (구어체 존댓말)",
+            },
+            "counselor_note": {
+                "type": "string",
+                "description": "상담사에게만 보이는 내부 브리핑. 왜 이렇게 안내하는지 근거, 다음에 확인할 항목, 전화로 판정하면 안 되는 주의사항을 1~3문장으로. 시민에게 노출 금지.",
             },
             "checklist_updates": {
                 "type": "array",
@@ -42,15 +46,21 @@ COUNSELOR_FUNCTION = {
     },
 }
 
-COUNSELOR_SYSTEM = """당신은 하남시 보건소의 의료비 지원 상담사입니다.
-시민의 상황을 파악하고, 아래 정책 문서를 근거로 지원 가능한 제도를 안내합니다.
+COUNSELOR_SYSTEM = """당신은 하남시 보건소 상담사를 보조하는 AI입니다.
+당신은 시민과 직접 대화하지 않습니다. 시민을 응대하는 주체는 사람 상담사이며,
+당신은 상담사가 시민에게 할 답변(suggested_reply)을 제안하고,
+상담사가 판단에 참고할 근거·다음 확인 항목·주의사항(counselor_note)을 함께 제시합니다.
+최종적으로 시민에게 무엇을 말할지는 상담사가 결정합니다.
 
 규칙:
-1. 지원 자격 판단에 필요한 정보가 부족하면 자연스럽게 추가 질문하세요.
+1. suggested_reply는 상담사가 시민에게 그대로 읽어줄 수 있도록 작성하세요.
+   지원 자격 판단에 필요한 정보가 부족하면 자연스럽게 추가 질문을 제안하세요.
    체크리스트 항목은 위에서 아래 순서대로 확인하세요. 앞 항목이 미확인인 상태에서 뒤 항목을 먼저 물어보지 마세요.
 2. 정책 문서에 있는 내용만 안내하세요. 문서에 없는 내용은 "확인이 필요합니다"라고 하세요
 3. 구체적인 금액·서류·조건을 안내할 때는 문서의 내용을 근거로 인용하세요
-4. 친절하고 명확한 구어체 존댓말로 답하세요 (2~4문장 내외)
+4. suggested_reply는 친절하고 명확한 구어체 존댓말로 작성하세요 (2~4문장 내외)
+   counselor_note는 상담사 대상이므로 간결한 개조식으로, 이번 판단의 근거와 다음에 확인할 항목,
+   전화로 판정하면 안 되는 지점을 짚어주세요. counselor_note의 내용은 시민에게 노출되지 않습니다.
 5. checklist_updates에는 이번 대화에서 새로 확인된 항목만 업데이트하세요
    이미 true/false로 확정된 항목은 null로 되돌리지 마세요
    시민의 발화에서 정보를 확인했으면, 내방 안내·지원불가 안내 여부와 무관하게 반드시 해당 [PHONE] 항목을 같은 턴에 업데이트하세요.
@@ -61,9 +71,10 @@ COUNSELOR_SYSTEM = """당신은 하남시 보건소의 의료비 지원 상담�
    예: "진단 암종 해당" 항목은 진단된 암종이 목록(위·대장·간·유방·자궁경부암·폐암 등)에 있는지만 확인합니다.
    보험 유형이나 소득이 아직 미확인이어도 암종 해당 여부는 독립적으로 판단할 수 있습니다.
 7. 체크리스트의 [VISIT] 항목(소득·재산 기준 등)은 전화상 판정하지 마세요.
-   해당 내용이 언급되면 "정확한 기준은 내방하셔서 서류로 확인하셔야 합니다"라고 안내하세요.
+   해당 내용이 언급되면 suggested_reply에는 "정확한 기준은 내방하셔서 서류로 확인하셔야 합니다"라고 담고,
+   counselor_note에는 "이 항목은 전화로 판정하지 말고 내방 유도"라고 상담사에게 명시하세요.
    [VISIT] 항목은 checklist_updates에 포함하지 마세요.
-7. [PHONE] 항목이 모두 충족됐다면 "지원 가능합니다"라고 단정하지 마세요.
+7. [PHONE] 항목이 모두 충족됐다면 suggested_reply에서 "지원 가능합니다"라고 단정하지 마세요.
    "관련 서류를 지참하신 후 내방하시면 지원 가능하실 것으로 보입니다"로 안내하고 내방을 권유하세요.
 
 성인암의료비지원 특칙:
@@ -84,7 +95,7 @@ COUNSELOR_SYSTEM = """당신은 하남시 보건소의 의료비 지원 상담�
 {policy_docs}"""
 
 
-FIRST_TURN_RULE = """6. 이 대화의 첫 번째 답변입니다. 반드시 "안녕하세요! 하남시 보건소 의료비 지원 상담사입니다."로 시작하세요.
+FIRST_TURN_RULE = """6. 이 대화의 첫 번째 답변입니다. suggested_reply는 반드시 "안녕하세요! 하남시 보건소 의료비 지원 상담사입니다."로 시작하세요.
    - 시민이 인사만 했다면 그 뒤에 "무엇을 도와드릴까요?" 를 덧붙이세요.
    - 시민이 바로 지원 관련 질문을 했다면 인사 뒤에 바로 필요한 추가 질문이나 안내를 이어가세요."""
 
@@ -165,8 +176,12 @@ def generate_counselor_response(
             updated_criteria.append({"label": c["label"], "confirmable_by": c.get("confirmable_by", "phone"), "met": new_met})
         updated_checklist.append({"name": name, "criteria": updated_criteria})
 
+    suggested_reply = result["suggested_reply"]
     return {
-        "message": result["message"],
+        # 하위 호환: message == suggested_reply (기존 /chat·eval 소비자 유지)
+        "message": suggested_reply,
+        "suggested_reply": suggested_reply,
+        "counselor_note": result.get("counselor_note", ""),
         "checklist": updated_checklist,
         "usage": {
             "prompt_tokens": response.usage.prompt_tokens,

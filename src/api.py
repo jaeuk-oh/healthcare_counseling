@@ -25,7 +25,7 @@ from src.rag.counselor import generate_counselor_response
 from src.rag.generator import classify
 from src.rag.retriever import retrieve
 from src.rag.rare_disease_lookup import lookup as rare_lookup
-from src.db import create_session, save_message, end_session
+from src.db import create_session, save_message, end_session, save_suggestion_feedback
 
 app = FastAPI(title="보건소 의료비 지원 상담 AI")
 
@@ -65,6 +65,15 @@ class ChatRequest(BaseModel):
 
 class ClassifyRequest(BaseModel):
     scenario: str
+
+
+class SuggestionFeedbackRequest(BaseModel):
+    """상담사가 AI 제안을 채택/수정/무시한 내역 (HITL 로그)."""
+    session_id: str | None = None
+    turn_index: int
+    suggested_reply: str
+    final_reply: str = ""
+    action: str  # "accepted" | "edited" | "rejected"
 
 
 
@@ -139,7 +148,11 @@ async def chat_endpoint(req: ChatRequest):
     }
 
     return {
+        # 시민에게 그대로 읽어줄 수 있는 제안 답변 (하위 호환 키 유지)
         "counselor_message": counselor_result["message"],
+        "suggested_reply": counselor_result["suggested_reply"],
+        # 상담사 대상 내부 브리핑 (시민 비노출)
+        "counselor_note": counselor_result["counselor_note"],
         "checklist": counselor_result["checklist"],
         "token_usage": total_usage,
         "session_id": session_id,
@@ -173,6 +186,45 @@ async def session_end_endpoint(req: SessionEndRequest):
         "total_tokens": req.total_tokens,
     }
     with open(logs_dir / "sessions.jsonl", "a", encoding="utf-8") as f:
+        f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
+    return {"status": "ok"}
+
+
+@app.post("/suggestion-feedback")
+async def suggestion_feedback_endpoint(req: SuggestionFeedbackRequest):
+    """상담사가 AI 제안을 어떻게 처리했는지(HITL) 기록한다.
+
+    이 로그가 '대화 데이터 기반 오류 발굴' 루프의 원천 데이터가 된다.
+    (제안 대비 상담사 수정 내역 → 반복되는 수정 패턴 = 오류 케이스 후보)
+    """
+    valid_actions = {"accepted", "edited", "rejected"}
+    if req.action not in valid_actions:
+        raise HTTPException(
+            status_code=400,
+            detail=f"action은 {valid_actions} 중 하나여야 합니다",
+        )
+
+    # Supabase 저장 (미설정 시 graceful skip)
+    save_suggestion_feedback(
+        session_id=req.session_id,
+        turn_index=req.turn_index,
+        suggested_reply=req.suggested_reply,
+        final_reply=req.final_reply,
+        action=req.action,
+    )
+
+    # fallback: 로컬 JSONL 로그 유지
+    logs_dir = Path(__file__).parent.parent / "logs"
+    logs_dir.mkdir(exist_ok=True)
+    log_entry = {
+        "timestamp": datetime.now().isoformat(timespec="seconds"),
+        "session_id": req.session_id,
+        "turn_index": req.turn_index,
+        "suggested_reply": req.suggested_reply,
+        "final_reply": req.final_reply,
+        "action": req.action,
+    }
+    with open(logs_dir / "suggestion_feedback.jsonl", "a", encoding="utf-8") as f:
         f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
     return {"status": "ok"}
 
