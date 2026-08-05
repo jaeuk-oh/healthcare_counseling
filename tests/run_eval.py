@@ -1,4 +1,4 @@
-"""자동화 평가 하네스 — 5개 시나리오 pass/fail 검증."""
+"""`/query` 정책 분류 평가 하네스 — 시나리오별 recall/precision 기반 pass/fail 검증."""
 import sys
 import yaml
 import requests
@@ -49,7 +49,7 @@ def main():
             resp = requests.post(
                 f"{API_URL}/query",
                 json={"query": s["query"]},
-                timeout=60,
+                timeout=180,  # 60s에서는 문서 전체를 컨텍스트로 넣는 턴이 간헐적으로 가짜 실패
             )
             resp.raise_for_status()
             result = evaluate_scenario(s, resp.json())

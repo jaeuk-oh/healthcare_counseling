@@ -103,7 +103,12 @@ def classify(scenario: str) -> dict:
 
 RECOMMEND_FUNCTION = {
     "name": "recommend_policies",
-    "description": "주어진 정책 문서를 근거로 신청 가능한 보건소 의료비 지원 정책을 추천하고, 해당 없는 상담은 담당 부서로 연결합니다",
+    "description": (
+        "주어진 정책 문서를 근거로 시민에게 해당하는 보건소 사업을 판별합니다. "
+        "의료비 지원 신청뿐 아니라 국가암검진 대상·절차 문의(검진 통보서를 받고 어디서 "
+        "검진받는지 묻는 경우 등)도 해당 사업을 applicable=true로 판별해야 합니다. "
+        "보건소 사업과 무관한 상담은 담당 부서로 연결합니다"
+    ),
     "parameters": {
         "type": "object",
         "required": ["recommendations"],
@@ -157,6 +162,15 @@ SYSTEM_PROMPT = """당신은 보건소 의료비 지원 및 국가암검진 안�
 6. applicable 필드는 반드시 eligibility_reasoning의 최종 판단과 일치해야 합니다.
    reasoning에서 지원 불가, 신청 불가, 중단, 해당 없음이라고 판단했다면 applicable은 반드시 false입니다.
    reasoning이 "불가능하다", "해당되지 않는다", "지원 중단"으로 끝난다면 applicable=false입니다.
+7. 국가암검진 문의와 국가암검진 수검 이력을 구분하세요. 같은 단어가 나오지만 성격이 다릅니다.
+   - 검진을 받으려는 문의(예: "검진 통보서를 받았는데 어디서 받나요", "제가 검진 대상인가요",
+     "검진 비용이 얼마인가요")는 국가암검진 사업의 정상 상담입니다.
+     → 국가암검진을 applicable=true로 두고 검진 대상·절차를 안내하세요.
+       이 경우 암 진단 사실이 없으므로 의료비 지원 정책은 판단하지 마세요.
+   - 이미 암 진단을 받은 시민이 과거 수검 이력을 말하는 경우(예: "2020년에 국가암검진을 받았고
+     2022년에 위암 진단을 받았어요")는 검진 문의가 아닙니다.
+     수검일은 암의료비지원의 자격 조건(2021.6.30 이전 수검)을 설명하는 정보입니다.
+     → 국가암검진은 applicable=false로 두고, 암의료비지원 해당 여부를 판단하세요.
 
 보건소 담당 부서 연락처:
 {contacts}
@@ -170,6 +184,23 @@ RARE_DISEASE_SECTION = """희귀질환 코드 조회 결과:
 (위 질환은 희귀질환자 의료비지원사업 공식 대상 질환입니다. 판단 시 참고하세요.)
 
 """
+
+# function calling은 스키마를 유도할 뿐 보장하지 않는다. 실제 eval 중 두 가지 위반을 관측했다.
+#   1. arguments가 깨진 JSON — 반복 생성으로 56KB까지 늘어난 뒤 파싱 실패
+#   2. recommendations 원소가 object가 아닌 문자열 — r.get() 호출에서 AttributeError
+# 둘 다 500을 냈으므로, LLM 경계에서 재시도와 구조 검증으로 막는다.
+PARSE_ATTEMPTS = 2
+
+
+def valid_recommendations(result: dict | None) -> list[dict]:
+    """LLM이 돌려준 recommendations에서 스키마를 지킨 항목만 남긴다."""
+    if not isinstance(result, dict):
+        return []
+    raw = result.get("recommendations", [])
+    if not isinstance(raw, list):
+        return []
+    return [r for r in raw if isinstance(r, dict) and r.get("policy_name")]
+
 
 def generate(query: str, policy_docs: list[dict], rare_matches: list[dict] | None = None) -> dict:
     client = OpenAI()
@@ -185,26 +216,34 @@ def generate(query: str, policy_docs: list[dict], rare_matches: list[dict] | Non
         )
         rare_section = RARE_DISEASE_SECTION.format(matches=match_lines)
 
-    response = client.chat.completions.create(
-        model=LLM_MODEL,
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT.format(
-                contacts=get_contacts_summary(),
-                policy_docs=policy_text,
-                rare_disease_section=rare_section,
-            )},
-            {"role": "user", "content": query},
-        ],
-        tools=[{"type": "function", "function": RECOMMEND_FUNCTION}],
-        tool_choice={"type": "function", "function": {"name": "recommend_policies"}},
-    )
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT.format(
+            contacts=get_contacts_summary(),
+            policy_docs=policy_text,
+            rare_disease_section=rare_section,
+        )},
+        {"role": "user", "content": query},
+    ]
 
-    tool_call = response.choices[0].message.tool_calls[0]
-    result = json.loads(tool_call.function.arguments)
+    result = None
+    for attempt in range(PARSE_ATTEMPTS):
+        response = client.chat.completions.create(
+            model=LLM_MODEL,
+            messages=messages,
+            tools=[{"type": "function", "function": RECOMMEND_FUNCTION}],
+            tool_choice={"type": "function", "function": {"name": "recommend_policies"}},
+        )
+        tool_call = response.choices[0].message.tool_calls[0]
+        try:
+            result = json.loads(tool_call.function.arguments)
+            break
+        except json.JSONDecodeError:
+            if attempt == PARSE_ATTEMPTS - 1:
+                raise
 
     # Deduplicate by policy_name, preferring applicable:true
     by_name: dict[str, dict] = {}
-    for r in result.get("recommendations", []):
+    for r in valid_recommendations(result):
         name = r.get("policy_name")
         if name not in by_name or r.get("applicable"):
             by_name[name] = r
@@ -215,12 +254,18 @@ def generate(query: str, policy_docs: list[dict], rare_matches: list[dict] | Non
         "지원 불가능", "지원이 불가능", "지원신청 불가능", "신청 불가능",
         "신청 불가", "지원 불가", "불가능으로",
     ]
+    # 위 신호는 '의료비 지원' 자격 조건에 대한 것이다. 국가암검진은 의료비 지원이 아니라
+    # 검진 안내 사업이므로, reasoning에 "의료비 지원은 불가하나 검진은 대상"처럼 적히면
+    # 검진 자체가 가능한데도 applicable=false로 뒤집히는 오적용이 발생한다.
+    IGNORE_SIGNALS_FOR = {"국가암검진"}
     recommendations = list(by_name.values())
     for r in recommendations:
+        if r.get("policy_name") in IGNORE_SIGNALS_FOR:
+            continue
         if r.get("applicable") and any(s in r.get("eligibility_reasoning", "") for s in INELIGIBLE_SIGNALS):
             r["applicable"] = False
 
     return {
         "recommendations": recommendations,
-        "referral": result.get("referral"),
+        "referral": result.get("referral") if isinstance(result, dict) else None,
     }

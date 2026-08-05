@@ -89,6 +89,63 @@ FIRST_TURN_RULE = """6. 이 대화의 첫 번째 답변입니다. 반드시 "안
    - 시민이 바로 지원 관련 질문을 했다면 인사 뒤에 바로 필요한 추가 질문이나 안내를 이어가세요."""
 
 
+# function calling은 스키마를 유도할 뿐 보장하지 않는다. /chat에서도 checklist_updates
+# 원소가 object가 아닌 문자열로 오는 위반을 실측했고(500), 파싱 단계에서 걸러낸다.
+PARSE_ATTEMPTS = 2
+
+
+def parse_checklist_updates(result: dict | None) -> dict[str, dict]:
+    """LLM의 checklist_updates를 {정책명: {라벨: met}} 로 정규화한다.
+
+    스키마를 지키지 않은 항목은 조용히 버린다. 잘못 해석해서 상태를 오염시키는 것보다
+    업데이트를 누락하는 쪽이 안전하다 (누락은 다음 턴에 다시 물어보면 복구된다).
+    """
+    if not isinstance(result, dict):
+        return {}
+    updates: dict[str, dict] = {}
+    for u in result.get("checklist_updates", []) or []:
+        if not isinstance(u, dict):
+            continue
+        name = u.get("policy_name")
+        criteria = u.get("criteria")
+        if not name or not isinstance(criteria, list):
+            continue
+        updates[name] = {
+            c["label"]: c.get("met")
+            for c in criteria
+            if isinstance(c, dict) and c.get("label")
+        }
+    return updates
+
+
+def apply_checklist_guardrails(
+    checklist: list[dict],
+    updates_by_name: dict[str, dict],
+) -> list[dict]:
+    """LLM이 제안한 체크리스트 변경을 코드 레벨 가드레일로 걸러 최종 상태를 만든다.
+
+    LLM 출력과 무관하게 두 가지를 강제한다.
+    1. visit 항목 동결 — 전화로 판정 불가한 항목은 항상 met=None
+    2. 확정값 보호 — 이미 true/false로 확정된 항목은 None으로 되돌리지 못함
+       (true→false 같은 확정값 간 정정은 허용한다. 상담 중 사실이 정정될 수 있기 때문)
+    """
+    updated_checklist = []
+    for item in checklist:
+        name = item["name"]
+        criteria_updates = updates_by_name.get(name, {})
+        updated_criteria = []
+        for c in item["criteria"]:
+            if c.get("confirmable_by") == "visit":
+                updated_criteria.append({"label": c["label"], "confirmable_by": "visit", "met": None})
+                continue
+            new_met = criteria_updates.get(c["label"], c["met"])
+            if c["met"] is not None and new_met is None:
+                new_met = c["met"]
+            updated_criteria.append({"label": c["label"], "confirmable_by": c.get("confirmable_by", "phone"), "met": new_met})
+        updated_checklist.append({"name": name, "criteria": updated_criteria})
+    return updated_checklist
+
+
 def generate_counselor_response(
     messages: list[dict],
     policy_docs: list[dict],
@@ -124,49 +181,44 @@ def generate_counselor_response(
         )
         checklist_section = f"현재 체크리스트 상태:\n{lines}\n\n"
 
-    response = client.chat.completions.create(
-        model=LLM_MODEL,
-        messages=[
-            {
-                "role": "system",
-                "content": COUNSELOR_SYSTEM.format(
-                    contacts=get_contacts_summary(),
-                    policy_docs=policy_text,
-                    checklist_section=checklist_section,
-                    first_turn_rule=f"\n{FIRST_TURN_RULE}" if is_first_turn else "",
-                ),
-            },
-            *messages,
-        ],
-        tools=[{"type": "function", "function": COUNSELOR_FUNCTION}],
-        tool_choice={"type": "function", "function": {"name": "counselor_response"}},
-    )
+    request_messages = [
+        {
+            "role": "system",
+            "content": COUNSELOR_SYSTEM.format(
+                contacts=get_contacts_summary(),
+                policy_docs=policy_text,
+                checklist_section=checklist_section,
+                first_turn_rule=f"\n{FIRST_TURN_RULE}" if is_first_turn else "",
+            ),
+        },
+        *messages,
+    ]
 
-    tool_call = response.choices[0].message.tool_calls[0]
-    result = json.loads(tool_call.function.arguments)
+    result = None
+    for attempt in range(PARSE_ATTEMPTS):
+        response = client.chat.completions.create(
+            model=LLM_MODEL,
+            messages=request_messages,
+            tools=[{"type": "function", "function": COUNSELOR_FUNCTION}],
+            tool_choice={"type": "function", "function": {"name": "counselor_response"}},
+        )
+        tool_call = response.choices[0].message.tool_calls[0]
+        try:
+            result = json.loads(tool_call.function.arguments)
+            break
+        except json.JSONDecodeError:
+            if attempt == PARSE_ATTEMPTS - 1:
+                raise
 
-    updates_by_name = {
-        u["policy_name"]: {c["label"]: c["met"] for c in u["criteria"]}
-        for u in result.get("checklist_updates", [])
-    }
+    updated_checklist = apply_checklist_guardrails(checklist, parse_checklist_updates(result))
 
-    updated_checklist = []
-    for item in checklist:
-        name = item["name"]
-        criteria_updates = updates_by_name.get(name, {})
-        updated_criteria = []
-        for c in item["criteria"]:
-            if c.get("confirmable_by") == "visit":
-                updated_criteria.append({"label": c["label"], "confirmable_by": "visit", "met": None})
-                continue
-            new_met = criteria_updates.get(c["label"], c["met"])
-            if c["met"] is not None and new_met is None:
-                new_met = c["met"]
-            updated_criteria.append({"label": c["label"], "confirmable_by": c.get("confirmable_by", "phone"), "met": new_met})
-        updated_checklist.append({"name": name, "criteria": updated_criteria})
+    # 상담 문구는 대체하지 않는다. 없는 답변을 코드가 지어내면 그게 곧 오안내다.
+    message = result.get("message") if isinstance(result, dict) else None
+    if not message:
+        raise RuntimeError("LLM이 상담 문구(message)를 반환하지 않았습니다")
 
     return {
-        "message": result["message"],
+        "message": message,
         "checklist": updated_checklist,
         "usage": {
             "prompt_tokens": response.usage.prompt_tokens,
