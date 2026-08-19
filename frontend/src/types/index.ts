@@ -55,3 +55,22 @@ export interface ClassifyResponse {
   token_usage: TokenUsage;
 }
 
+export interface Persona {
+  id: string;
+  label: string;
+}
+
+export interface TrainStartResponse {
+  citizen_message: string;
+  checklist: PolicyChecklist[];
+  token_usage: TokenUsage;
+  session_id: string;
+}
+
+export interface TrainTurnResponse {
+  citizen_message: string;
+  checklist: PolicyChecklist[];
+  token_usage: TokenUsage;
+  session_id: string | null;
+}
+

@@ -13,7 +13,7 @@ load_dotenv()
 _oai = OpenAI(http_client=httpx.Client())
 
 API_URL = "http://localhost:8000"
-SCENARIOS_FILE = Path(__file__).parent / "counselor_eval_scenarios.yaml"
+SCENARIOS_FILE = Path(__file__).parent.parent / "src" / "data" / "personas.yaml"
 MAX_TURNS = 10
 
 TERMINATION_SIGNALS = {
