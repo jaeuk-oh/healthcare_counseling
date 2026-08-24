@@ -1,7 +1,11 @@
+# description  : eval·개발자용. 기대 결과가 적혀 있으므로 훈련자에게 노출 금지.
+# trainee_label: 훈련 모드 페르소나 선택 화면에 노출. 첫 발화에서 이미
+#                드러나는 사실만 담고, 자격 판정 결과는 넣지 않는다.
 scenarios:
   # 성인암 — 의료급여 수급자
   - id: C01
     description: 성인암 의료급여 수급자 → 암종 확인 후 내방 안내
+    trainee_label: "58세 · 위암 진단 · 의료급여 수급자라고 먼저 밝힘"
     initial_query: "의료급여 수급자인데 위암 진단을 받았어요."
     citizen_profile: |
       당신은 의료급여 수급자이며 2개월 전 위암 진단을 받은 58세 시민입니다.
@@ -23,6 +27,7 @@ scenarios:
   # 성인암 — 건보, 수검일 조건 미충족
   - id: C02
     description: 성인암 건보 수검일 미충족 → 지원불가 + 대안 안내
+    trainee_label: "60세 · 위암 진단 · 건강보험 가입자라고 먼저 밝힘"
     initial_query: "건강보험 가입자인데 위암 진단받았어요."
     citizen_profile: |
       당신은 건강보험 가입자이며 2025년 1월 위암 진단을 받은 60세 시민입니다.
@@ -42,6 +47,7 @@ scenarios:
   # 성인암 — 건보, 수검일·진단일 모두 충족 (삼분법 핵심 케이스)
   - id: C03
     description: 성인암 건보 조건 충족 → 보험료 확인 위해 내방 안내
+    trainee_label: "55세 · 위암 진단 · 건강보험 가입자라고 먼저 밝힘"
     initial_query: "건강보험 가입자인데 위암 진단을 받았어요. 보건소에서 지원을 받을 수 있나요?"
     citizen_profile: |
       당신은 건강보험 가입자이며 위암 진단을 받은 55세 시민입니다.
@@ -62,6 +68,7 @@ scenarios:
   # 소아암 — 의료급여 당연선정
   - id: C04
     description: 소아암 의료급여 수급자 → 당연선정, 소득 확인 없이 내방 안내
+    trainee_label: "10세 아이의 백혈병 진단 · 의료급여 수급 보호자"
     initial_query: "의료급여 수급자인데 10살 아이가 백혈병 진단을 받았어요."
     citizen_profile: |
       당신은 의료급여 수급자이며 10살 아이가 백혈병 진단을 받은 보호자입니다.
@@ -80,6 +87,7 @@ scenarios:
   # 희귀질환 — 파브리병
   - id: C05
     description: 희귀질환 파브리병 → KCD 코드 확인 후 소득 기준 내방 안내
+    trainee_label: "40세 · 파브리병 진단으로 문의"
     initial_query: "파브리병 진단을 받았어요. 의료비 지원이 있나요?"
     citizen_profile: |
       당신은 파브리병(Fabry disease) 진단을 받은 40세 건강보험 가입자입니다.
@@ -105,6 +113,7 @@ scenarios:
   #       여기서 보는 것은 실제 멀티턴 대화에서 상태가 실제로 흔들리지 않는지다.
   - id: C06
     description: 희귀질환 병명을 2턴째에 밝힘 → 중간에 확정된 KCD 항목이 종료까지 유지되는지
+    trainee_label: "40세 · 병명을 밝히지 않고 '희귀질환'이라고만 문의"
     initial_query: "희귀질환 진단을 받았는데 의료비 지원이 있나요?"
     citizen_profile: |
       당신은 파브리병(Fabry disease) 진단을 받은 40세 건강보험 가입자입니다.

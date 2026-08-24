@@ -136,12 +136,25 @@ def apply_checklist_guardrails(
         updated_criteria = []
         for c in item["criteria"]:
             if c.get("confirmable_by") == "visit":
-                updated_criteria.append({"label": c["label"], "confirmable_by": "visit", "met": None})
+                updated_criteria.append({
+                    "label": c["label"],
+                    "confirmable_by": "visit",
+                    "decisive": c.get("decisive", True),
+                    "met": None,
+                })
                 continue
             new_met = criteria_updates.get(c["label"], c["met"])
             if c["met"] is not None and new_met is None:
                 new_met = c["met"]
-            updated_criteria.append({"label": c["label"], "confirmable_by": c.get("confirmable_by", "phone"), "met": new_met})
+            updated_criteria.append({
+                "label": c["label"],
+                "confirmable_by": c.get("confirmable_by", "phone"),
+                # decisive 를 여기서 흘리면 클라이언트 왕복 중에 사라진다.
+                # confirmable_by 가 Pydantic 모델에서 누락돼 visit 동결이 조용히 죽었던
+                # 회귀(dfd32f9)와 같은 경로다.
+                "decisive": c.get("decisive", True),
+                "met": new_met,
+            })
         updated_checklist.append({"name": name, "criteria": updated_criteria})
     return updated_checklist
 
