@@ -1,14 +1,21 @@
 "use client";
 
-import type { PolicyChecklist } from "@/types";
+import type { PolicyChecklist, PolicyCriterion } from "@/types";
 
 interface PolicyCardProps {
   checklist: PolicyChecklist;
 }
 
-function criterionIcon(met: boolean | null) {
-  if (met === true) return { icon: "✓", cls: "bg-green-500 text-white" };
-  if (met === false) return { icon: "✗", cls: "bg-red-400 text-white" };
+const isDecisive = (c: PolicyCriterion) => c.decisive !== false;
+
+function criterionIcon(c: PolicyCriterion) {
+  if (c.met === true) return { icon: "✓", cls: "bg-green-500 text-white" };
+  if (c.met === false) {
+    // 분기 판별 항목의 false 는 탈락이 아니다. ✗ 로 그리면 상담사가 오독한다.
+    return isDecisive(c)
+      ? { icon: "✗", cls: "bg-red-400 text-white" }
+      : { icon: "→", cls: "bg-blue-100 text-blue-600" };
+  }
   return { icon: "·", cls: "bg-gray-200 text-gray-500" };
 }
 
@@ -18,8 +25,15 @@ export default function PolicyCard({ checklist }: PolicyCardProps) {
   const phoneCriteria = criteria.filter((c) => c.confirmable_by !== "visit");
   const visitCriteria = criteria.filter((c) => c.confirmable_by === "visit");
 
-  const allPhoneMet = phoneCriteria.length > 0 && phoneCriteria.every((c) => c.met === true);
-  const anyPhoneFalse = phoneCriteria.some((c) => c.met === false);
+  // 분기 판별 항목(decisive === false)은 카드 배지 판정에서 제외한다.
+  // 성인암의 '보험 유형 확인'은 건강보험 가입자일 때 met=false 가 되는데, 이걸 부적격으로
+  // 세면 조건을 충족하는 건보 가입자에게 '해당 없음'(빨강)이 뜬다. 지원을 놓치는 쪽의
+  // 피해가 헛걸음보다 크다는 것이 이 프로젝트의 전제이므로, 그 방향의 오표시를 막는다.
+  const decisivePhoneCriteria = phoneCriteria.filter(isDecisive);
+
+  const allPhoneMet =
+    decisivePhoneCriteria.length > 0 && decisivePhoneCriteria.every((c) => c.met === true);
+  const anyPhoneFalse = decisivePhoneCriteria.some((c) => c.met === false);
 
   const cardCls = allPhoneMet
     ? "border-green-400 bg-green-50"
@@ -47,7 +61,7 @@ export default function PolicyCard({ checklist }: PolicyCardProps) {
           <p className="mb-1.5 text-xs font-medium text-gray-400 uppercase tracking-wide">전화 확인</p>
           <ul className="space-y-1.5">
             {phoneCriteria.map((c) => {
-              const { icon, cls } = criterionIcon(c.met);
+              const { icon, cls } = criterionIcon(c);
               return (
                 <li key={c.label} className="flex items-start gap-2 text-sm">
                   <span
@@ -55,7 +69,13 @@ export default function PolicyCard({ checklist }: PolicyCardProps) {
                   >
                     {icon}
                   </span>
-                  <span className={c.met === false ? "text-gray-400 line-through" : "text-gray-700"}>
+                  <span
+                    className={
+                      c.met === false && isDecisive(c)
+                        ? "text-gray-400 line-through"
+                        : "text-gray-700"
+                    }
+                  >
                     {c.label}
                   </span>
                 </li>

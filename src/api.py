@@ -51,6 +51,9 @@ class PolicyCriterion(BaseModel):
     label: str
     met: bool | None = None
     confirmable_by: str = "phone"
+    # False 면 met=False 가 부적격이 아니라 분기 판별 결과라는 뜻 (generator.POLICY_CRITERIA 참고).
+    # 클라이언트가 매 턴 체크리스트 전체를 되보내므로 여기 없으면 왕복 중에 값이 사라진다.
+    decisive: bool = True
 
 
 class PolicyChecklist(BaseModel):

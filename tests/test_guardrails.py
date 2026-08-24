@@ -18,7 +18,7 @@ def make_checklist(met_values: dict) -> list[dict]:
         {
             "name": "성인암의료비지원",
             "criteria": [
-                {"label": "보험 유형 확인", "confirmable_by": "phone", "met": met_values.get("보험", None)},
+                {"label": "보험 유형 확인", "confirmable_by": "phone", "decisive": False, "met": met_values.get("보험", None)},
                 {"label": "진단 암종 해당", "confirmable_by": "phone", "met": met_values.get("암종", None)},
                 {"label": "건강보험료 기준 충족", "confirmable_by": "visit", "met": met_values.get("보험료", None)},
             ],
@@ -174,6 +174,50 @@ def _():
         ]
     })
     assert result == {"성인암의료비지원": {"보험 유형 확인": True}}, result
+
+
+# --- 가드레일 5: decisive 플래그 보존 ----------------------------------------
+# 이 항목들이 지키는 실패: 화면이 '보험 유형 확인'의 met=False 를 부적격으로 읽어,
+# 조건을 충족하는 건강보험 가입자 카드에 '해당 없음'(빨강)이 뜨던 것.
+# decisive=False 가 왕복 중 한 번이라도 사라지면 그 오표시가 그대로 재현된다.
+# confirmable_by 가 Pydantic 모델에서 누락돼 visit 동결이 조용히 죽었던 회귀(dfd32f9)와 같은 경로다.
+
+@case("decisive=False 는 가드레일을 통과해도 유지된다")
+def _():
+    result = apply_checklist_guardrails(
+        make_checklist({}),
+        {"성인암의료비지원": {"보험 유형 확인": False}},
+    )
+    보험 = next(c for c in result[0]["criteria"] if c["label"] == "보험 유형 확인")
+    assert 보험["decisive"] is False, 보험
+
+
+@case("decisive 미표기 항목은 True(부적격 판정 대상)로 취급된다")
+def _():
+    result = apply_checklist_guardrails(
+        make_checklist({}),
+        {"성인암의료비지원": {"진단 암종 해당": True}},
+    )
+    암종 = next(c for c in result[0]["criteria"] if c["label"] == "진단 암종 해당")
+    assert 암종["decisive"] is True, 암종
+
+
+@case("visit 동결 경로에서도 decisive 가 사라지지 않는다")
+def _():
+    result = apply_checklist_guardrails(
+        make_checklist({}),
+        {"성인암의료비지원": {"건강보험료 기준 충족": True}},
+    )
+    보험료 = next(c for c in result[0]["criteria"] if c["label"] == "건강보험료 기준 충족")
+    assert 보험료["met"] is None and 보험료["decisive"] is True, 보험료
+
+
+@case("POLICY_CRITERIA 의 '보험 유형 확인'은 분기 항목으로 표시돼 있다")
+def _():
+    from src.rag.generator import POLICY_CRITERIA
+    for policy in ("성인암의료비지원", "소아암의료비지원"):
+        보험 = next(c for c in POLICY_CRITERIA[policy] if c["label"].startswith("보험 유형 확인"))
+        assert 보험.get("decisive") is False, (policy, 보험)
 
 
 def main():

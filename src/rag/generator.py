@@ -7,11 +7,16 @@ LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o")
 
 # ---------------------------------------------------------------------------
 # 정책별 체크리스트 항목 (하드코딩)
+#
+# decisive=False 는 "이 항목의 met=False 가 부적격을 뜻하지 않는다"는 표시다.
+# '보험 유형 확인'이 그렇다. 건강보험 가입자(met=False)는 탈락이 아니라 수검일·진단일을
+# 더 확인하는 다른 경로로 갈 뿐이다. 이 구분이 없으면 화면이 met=False 하나만 보고
+# 지원 가능한 사람을 '해당 없음'으로 표시한다 (실제로 그렇게 표시되고 있었다).
 # ---------------------------------------------------------------------------
 
 POLICY_CRITERIA = {
     "성인암의료비지원": [
-        {"label": "보험 유형 확인 (의료급여·차상위 / 건강보험)", "confirmable_by": "phone"},
+        {"label": "보험 유형 확인 (의료급여·차상위 / 건강보험)", "confirmable_by": "phone", "decisive": False},
         {"label": "진단 암종이 지원 범위에 해당 (위·대장·간·유방·자궁경부암·폐암)", "confirmable_by": "phone"},
         {"label": "국가암검진 수검일 확인 (건강보험 가입자만 — 2021.6.30 이전 수검?)", "confirmable_by": "phone"},
         {"label": "암 진단일 확인 (건강보험 가입자만 — 2023.6.30 이전 진단?)", "confirmable_by": "phone"},
@@ -19,7 +24,7 @@ POLICY_CRITERIA = {
     ],
     "소아암의료비지원": [
         {"label": "나이 확인 (지원신청일 기준 만 18세 미만)", "confirmable_by": "phone"},
-        {"label": "보험 유형 확인 (건강보험 / 의료급여·차상위)", "confirmable_by": "phone"},
+        {"label": "보험 유형 확인 (건강보험 / 의료급여·차상위)", "confirmable_by": "phone", "decisive": False},
         {"label": "소득·재산 기준 충족 (건강보험 가입자만 해당 — 의료급여 수급자는 당연 선정)", "confirmable_by": "visit"},
     ],
     "희귀질환의료비지원": [
@@ -79,7 +84,7 @@ def classify(scenario: str) -> dict:
     checklist = [
         {
             "name": policy,
-            "criteria": [{"label": c["label"], "confirmable_by": c["confirmable_by"], "met": None} for c in POLICY_CRITERIA[policy]],
+            "criteria": [{"label": c["label"], "confirmable_by": c["confirmable_by"], "decisive": c.get("decisive", True), "met": None} for c in POLICY_CRITERIA[policy]],
         }
         for policy in relevant
         if policy in POLICY_CRITERIA
